@@ -1,0 +1,31 @@
+{
+    "$schema"    : "https://schemas.wp.org/trunk/block.json",
+    "apiVersion" : 3,
+    "name"       : "kfm/file-manager",
+    "version"    : "1.0.5",
+    "title"      : "KFM File Manager",
+    "category"   : "widgets",
+    "icon"       : "media-document",
+    "description": "Embeds the KFM File Manager.  Access is governed by the plugin's role setting.",
+    "keywords"   : [ "file", "manager", "files", "media", "kfm" ],
+    "textdomain" : "kfm-file-manager",
+    "supports"   : {
+        "html"           : false,
+        "align"          : [ "wide", "full" ],
+        "color"          : { "background": false, "text": false },
+        "spacing"        : { "margin": true, "padding": false }
+    },
+    "attributes" : {
+        "height": {
+            "type"    : "number",
+            "default" : 600
+        },
+        "showTree": {
+            "type"    : "boolean",
+            "default" : true
+        }
+    },
+    "editorScript" : "file:./index.js",
+    "editorStyle"  : "file:./editor.css",
+    "style"        : "file:./style.css"
+}

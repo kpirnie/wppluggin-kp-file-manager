@@ -1,0 +1,356 @@
+/* ═══════════════════════════════════════════════ KFM – Custom styles ══
+   UIKit 3 handles base components. This file: layout, tree, dark/light
+   CSS vars, editor, toolbar skin, icon alignment, UIKit overrides.
+═══════════════════════════════════════════════════════════════════════ */
+
+/* ── UIKit z-index fix for WordPress admin (WP menu is z 9990) ── */
+.uk-modal      { z-index: 100010 !important; }
+.uk-tooltip    { z-index: 100020 !important; }
+.uk-notification { z-index: 100030 !important; }
+
+/* ══════════════════════════════ CSS custom properties – light ══ */
+
+.kfm-wrap {
+    --kfm-toolbar-bg   : #23282d;
+    --kfm-toolbar-txt  : #eaeaea;
+    --kfm-toolbar-btn  : rgba(255,255,255,.12);
+    --kfm-toolbar-btn-h: rgba(255,255,255,.22);
+    --kfm-bg           : #ffffff;
+    --kfm-bg-alt       : #f8f9fa;
+    --kfm-border       : #e2e8f0;
+    --kfm-text         : #1a202c;
+    --kfm-muted        : #6b7280;
+    --kfm-accent       : #1e87f0;
+    --kfm-row-hover    : #f0f6ff;
+    --kfm-row-sel      : #dbeafe;
+    --kfm-dir-color    : #f59e0b;
+    --kfm-tree-bg      : #f8f9fa;
+    --kfm-tree-link    : #334155;
+    --kfm-resizer      : #e2e8f0;
+    --kfm-editor-hdr   : #1e2330;
+    --kfm-editor-status: #21252b;
+    --kfm-perms-color  : #6b7280;
+}
+
+/* ════════════════════════════════════════ Dark mode overrides ══ */
+
+.kfm-wrap.kfm-dark {
+    --kfm-toolbar-bg   : #111318;
+    --kfm-toolbar-txt  : #c9d1d9;
+    --kfm-toolbar-btn  : rgba(255,255,255,.10);
+    --kfm-toolbar-btn-h: rgba(255,255,255,.18);
+    --kfm-bg           : #1a1d27;
+    --kfm-bg-alt       : #20232e;
+    --kfm-border       : #2d3748;
+    --kfm-text         : #e2e8f0;
+    --kfm-muted        : #8b9eb0;
+    --kfm-accent       : #58a6ff;
+    --kfm-row-hover    : #1e2640;
+    --kfm-row-sel      : #172554;
+    --kfm-dir-color    : #f6b73c;
+    --kfm-tree-bg      : #1e2130;
+    --kfm-tree-link    : #c9d1d9;
+    --kfm-resizer      : #2d3748;
+    --kfm-editor-hdr   : #161b22;
+    --kfm-editor-status: #181c24;
+    --kfm-perms-color  : #8b9eb0;
+}
+
+/* Dark mode: UIKit modals live outside .kfm-wrap so use html attr */
+html[data-kfm-theme="dark"] .uk-modal-dialog  { background:#1a1d27; color:#e2e8f0; }
+html[data-kfm-theme="dark"] .uk-modal-header,
+html[data-kfm-theme="dark"] .uk-modal-footer  { border-color:#2d3748; background:#20232e; }
+html[data-kfm-theme="dark"] .uk-modal-title   { color:#e2e8f0; }
+html[data-kfm-theme="dark"] .uk-modal-body    { color:#e2e8f0; }
+html[data-kfm-theme="dark"] .uk-modal-close   { color:#8b9eb0; }
+html[data-kfm-theme="dark"] .uk-modal-close:hover { color:#e2e8f0; }
+html[data-kfm-theme="dark"] .uk-input,
+html[data-kfm-theme="dark"] .uk-select,
+html[data-kfm-theme="dark"] .uk-textarea       { background:#252836; color:#e2e8f0; border-color:#2d3748; }
+html[data-kfm-theme="dark"] .uk-table th       { color:#8b9eb0; }
+html[data-kfm-theme="dark"] .uk-table td       { color:#e2e8f0; }
+html[data-kfm-theme="dark"] .uk-table-divider > tr:not(:first-child),
+html[data-kfm-theme="dark"] .uk-table-divider > :not(:first-child) > tr,
+html[data-kfm-theme="dark"] .uk-table-divider > :first-child > tr:not(:first-child) { border-color:#2d3748; }
+html[data-kfm-theme="dark"] .uk-table-hover > tr:hover,
+html[data-kfm-theme="dark"] .uk-table-hover tbody tr:hover { background:#1e2640; }
+html[data-kfm-theme="dark"] .uk-checkbox       { background:#252836; border-color:#2d3748; }
+html[data-kfm-theme="dark"] .uk-button-default { background:rgba(255,255,255,.08); color:#c9d1d9; border-color:#2d3748; }
+html[data-kfm-theme="dark"] .uk-button-default:hover { background:rgba(255,255,255,.15); color:#fff; border-color:#3d4f66; }
+html[data-kfm-theme="dark"] .uk-notification-message  { background:#252836; color:#e2e8f0; }
+html[data-kfm-theme="dark"] .uk-breadcrumb a   { color:#58a6ff; }
+html[data-kfm-theme="dark"] .uk-breadcrumb span { color:#8b9eb0; }
+html[data-kfm-theme="dark"] .uk-breadcrumb > :nth-child(n+2):not(.uk-first-column)::before { color:#2d3748; }
+
+/* ═══════════════════════════════════════════════════ Wrap layout ══ */
+
+.kfm-wrap {
+    display        : flex;
+    flex-direction : column;
+    height         : calc(100vh - 100px);
+    min-height     : 500px;
+    background     : var(--kfm-bg);
+    border         : 1px solid var(--kfm-border);
+    border-radius  : 4px;
+    overflow       : hidden;
+    position       : relative;
+    font-size      : 13px;
+    color          : var(--kfm-text);
+    transition     : background .2s, color .2s;
+}
+
+/* ═══════════════════════════════════════════════════════ Toolbar ══ */
+
+.kfm-toolbar {
+    background  : var(--kfm-toolbar-bg);
+    padding     : 8px 12px;
+    flex-shrink : 0;
+    gap         : 6px;
+    flex-wrap   : wrap;
+    transition  : background .2s;
+}
+
+.kfm-toolbar-left  { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.kfm-toolbar-right { display: flex; align-items: center; gap: 6px; }
+
+/* ── Toolbar button base: inline-flex so icon + text are centered ── */
+.kfm-toolbar .uk-button {
+    display      : inline-flex;
+    align-items  : center;
+    justify-content: center;
+    gap          : 5px;
+    color        : var(--kfm-toolbar-txt);
+    background   : var(--kfm-toolbar-btn);
+    border       : 1px solid rgba(255,255,255,.15);
+    font-size    : 12px;
+    padding      : 0 10px;
+    height       : 30px;
+    line-height  : 1;
+    white-space  : nowrap;
+    vertical-align: middle;
+}
+.kfm-toolbar .uk-button svg { display: block; flex-shrink: 0; }
+.kfm-toolbar .uk-button:not(:disabled):hover { background:var(--kfm-toolbar-btn-h); color:#fff; }
+.kfm-toolbar .uk-button:disabled { opacity:.38; cursor:not-allowed; }
+.kfm-toolbar .uk-button-primary  { background:#1e87f0; border-color:#1672cc; color:#fff; }
+.kfm-toolbar .uk-button-primary:not(:disabled):hover  { background:#1672cc; color:#fff; }
+.kfm-toolbar .uk-button-danger   { background:#f0506e; border-color:#da3457; color:#fff; }
+.kfm-toolbar .uk-button-danger:not(:disabled):hover   { background:#da3457; color:#fff; }
+
+.kfm-toolbar-divider { width:1px; height:22px; background:rgba(255,255,255,.18); flex-shrink:0; margin:0 4px; }
+
+.kfm-btn-group { display:inline-flex; }
+.kfm-btn-group .uk-button:not(:first-child) { border-left-color:rgba(255,255,255,.08); }
+.kfm-btn-sep { margin-left:2px; }
+
+/* Scissors — displayed as text but forced to match icon height */
+.kfm-cut-icon {
+    font-size   : 14px;
+    line-height : 1;
+    display     : inline-block;
+    flex-shrink : 0;
+}
+
+.kfm-theme-btn { font-size:14px; padding:0 9px; }
+
+.kfm-status { font-size:11px; color:var(--kfm-toolbar-txt); opacity:.8; white-space:nowrap; }
+
+/* ════════════════════════════════════════════════ Breadcrumb ══ */
+
+.kfm-breadcrumb-wrap {
+    padding      : 7px 14px;
+    background   : var(--kfm-bg-alt);
+    border-bottom: 1px solid var(--kfm-border);
+    flex-shrink  : 0;
+    transition   : background .2s;
+}
+.kfm-wrap .uk-breadcrumb       { margin:0; flex-wrap:wrap; }
+.kfm-wrap .uk-breadcrumb a     { color:var(--kfm-accent); font-size:12px; }
+.kfm-wrap .uk-breadcrumb span  { color:var(--kfm-muted);  font-size:12px; }
+.kfm-wrap .uk-breadcrumb > :nth-child(n+2):not(.uk-first-column)::before { color:var(--kfm-border); }
+
+/* ══════════════════════════════════════════════════════ Body ══ */
+
+.kfm-body { display:flex; flex:1; overflow:hidden; }
+
+/* ═══════════════════════════════════════════════ Tree panel ══ */
+
+.kfm-tree-panel {
+    width       : 220px; min-width:120px; max-width:500px;
+    overflow-y  : auto;
+    border-right: 1px solid var(--kfm-border);
+    background  : var(--kfm-tree-bg);
+    flex-shrink : 0;
+    padding     : 8px 0;
+    transition  : background .2s;
+}
+.kfm-tree-list  { list-style:none; margin:0; padding:0 0 0 14px; }
+.kfm-tree-item  { margin:0; padding:0; }
+.kfm-tree-row   { display:flex; align-items:center; }
+.kfm-tree-toggle {
+    cursor:pointer; color:var(--kfm-muted);
+    width:18px; height:18px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .15s; opacity:.7;
+}
+.kfm-tree-toggle:hover { opacity:1; }
+.kfm-tree-item-open > .kfm-tree-row > .kfm-tree-toggle { transform:rotate(90deg); }
+.kfm-tree-link {
+    display:flex; align-items:center; gap:5px;
+    padding:3px 8px 3px 2px; text-decoration:none;
+    color:var(--kfm-tree-link); font-size:12px;
+    border-radius:3px; white-space:nowrap; flex:1; min-width:0;
+}
+.kfm-tree-link:hover              { background:var(--kfm-row-hover); color:var(--kfm-accent); }
+.kfm-tree-link-active             { background:var(--kfm-row-sel) !important; color:var(--kfm-accent) !important; }
+.kfm-tree-icon                    { color:var(--kfm-dir-color); flex-shrink:0; }
+.kfm-tree-name                    { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.kfm-tree-children                { padding-left:4px; }
+
+/* ═══════════════════════════════════════════════════ Resizer ══ */
+
+.kfm-resizer { width:4px; background:var(--kfm-resizer); cursor:col-resize; flex-shrink:0; transition:background .2s; }
+.kfm-resizer:hover { background:var(--kfm-accent); }
+
+/* ══════════════════════════════════════════════════════ Main ══ */
+
+.kfm-main { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+.kfm-table-scroll { flex:1; overflow:auto; height:100%; }
+
+/* ═══════════════════════════════════════════════ File table ══ */
+
+.kfm-wrap .uk-table { color:var(--kfm-text); margin:0; }
+.kfm-wrap .uk-table thead th {
+    position:sticky; top:0; background:var(--kfm-bg-alt);
+    border-bottom:2px solid var(--kfm-border); color:var(--kfm-text);
+    z-index:2; white-space:nowrap; padding:8px 10px; font-size:12px; transition:background .2s;
+}
+.kfm-wrap .uk-table tbody td { padding:5px 10px; vertical-align:middle; }
+.kfm-wrap .uk-table tbody tr { transition:background .1s; border-color:var(--kfm-border); }
+.kfm-wrap .uk-table-hover > tr:hover,
+.kfm-wrap .uk-table-hover tbody tr:hover { background:var(--kfm-row-hover); }
+.kfm-wrap .uk-table-divider > tr:not(:first-child),
+.kfm-wrap .uk-table-divider > :not(:first-child) > tr,
+.kfm-wrap .uk-table-divider > :first-child > tr:not(:first-child) { border-color:var(--kfm-border); }
+.kfm-table tr.kfm-selected { background:var(--kfm-row-sel) !important; }
+
+.kfm-sortable { cursor:pointer; user-select:none; }
+.kfm-sortable:hover { opacity:.8; }
+.kfm-sort-arrow { font-size:10px; color:var(--kfm-muted); margin-left:3px; }
+
+.kfm-col-check   { width:32px; }
+.kfm-col-icon    { width:28px; padding-right:0 !important; }
+.kfm-col-name    { min-width:140px; }
+.kfm-col-size    { width:80px; text-align:right; color:var(--kfm-muted); }
+.kfm-col-perms   { width:70px; }
+.kfm-col-mtime   { width:155px; color:var(--kfm-muted); font-size:11px; }
+.kfm-col-actions { width:120px; white-space:nowrap; }
+
+.kfm-dir-link, .kfm-file-link { text-decoration:none; color:var(--kfm-text); font-weight:500; }
+.kfm-dir-link:hover, .kfm-file-link:hover { color:var(--kfm-accent); }
+.kfm-file-icon { color:var(--kfm-muted); }
+.kfm-dir-icon  { color:var(--kfm-dir-color); }
+.kfm-perms-code { font-family:monospace; font-size:11px; color:var(--kfm-perms-color); }
+
+.kfm-badge-ro {
+    display:inline-block; padding:1px 5px; border-radius:3px;
+    font-size:9px; font-weight:700; letter-spacing:.5px;
+    background:#fef3c7; color:#92400e; vertical-align:middle; margin-left:4px;
+}
+
+/* ── Row action buttons: inline-flex so icon is centered ── */
+.kfm-row-btn {
+    display        : inline-flex;
+    align-items    : center;
+    justify-content: center;
+    width          : 26px;
+    height         : 24px;
+    padding        : 0;
+    background     : transparent;
+    border         : 1px solid var(--kfm-border);
+    border-radius  : 3px;
+    cursor         : pointer;
+    color          : var(--kfm-muted);
+    margin-right   : 2px;
+    transition     : all .15s;
+}
+.kfm-row-btn svg { display:block; }
+.kfm-row-btn:hover             { background:var(--kfm-row-hover); color:var(--kfm-accent); border-color:var(--kfm-accent); }
+.kfm-row-btn-del:hover         { background:#fee2e2; color:#dc2626; border-color:#fca5a5; }
+
+/* Empty state */
+.kfm-empty { margin:auto; color:var(--kfm-muted); }
+.kfm-empty [uk-icon] { opacity:.25; }
+
+/* ═══════════════════════════════════════════════ Drop zone ══ */
+
+.kfm-dropzone {
+    position:absolute; inset:0;
+    background:rgba(30,135,240,.07); border:3px dashed #1e87f0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:#1e87f0; pointer-events:none; opacity:0; transition:opacity .2s; z-index:50;
+}
+.kfm-dropzone.kfm-dropzone-active { opacity:1; pointer-events:all; }
+
+/* ════════════════════════════════════════════ Editor modal ══ */
+
+.kfm-editor-dialog {
+    display:flex; flex-direction:column; overflow:hidden;
+    background:#1e2330;
+}
+.kfm-editor-header {
+    padding:10px 16px; background:var(--kfm-editor-hdr);
+    border-bottom:1px solid rgba(255,255,255,.1);
+    flex-shrink:0; color:#e2e8f0;
+    display:flex; align-items:center; justify-content:space-between;
+}
+.kfm-editor-header .uk-h5 { color:#e2e8f0; margin:0; font-size:13px; }
+.kfm-editor-header-actions { display:flex; align-items:center; gap:10px; }
+
+/* Save button: inline-flex to center icon+text */
+.kfm-editor-header .uk-button {
+    display:inline-flex; align-items:center; gap:5px;
+}
+.kfm-editor-header .uk-button svg { display:block; flex-shrink:0; }
+
+.kfm-editor-close.uk-modal-close-default { position:static; color:#8b9eb0; font-size:18px; padding:0; }
+.kfm-editor-close.uk-modal-close-default:hover { color:#e2e8f0; }
+
+.kfm-editor-cm-wrap { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+.kfm-editor-cm-wrap .CodeMirror {
+    height:100%;
+    font-family:"SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size:13.5px; line-height:1.6;
+}
+.kfm-editor-cm-wrap .CodeMirror-scroll { height:100%; }
+
+.kfm-editor-statusbar {
+    display:flex; align-items:center; gap:16px;
+    padding:4px 14px; background:var(--kfm-editor-status);
+    color:#636d83; font-size:11px; font-family:monospace;
+    flex-shrink:0; border-top:1px solid rgba(0,0,0,.3);
+}
+
+html[data-kfm-theme="dark"] .kfm-editor-dialog { background:#161b22; }
+html[data-kfm-theme="dark"] .kfm-editor-header  { background:#0d1117; }
+
+/* ═══════════════════════════════════════ Permissions modal ══ */
+
+.kfm-chmod-path { font-family:monospace; word-break:break-all; margin:0 0 12px; }
+.kfm-chmod-table td:first-child { font-weight:600; }
+
+/* ══════════════════════════════════════════════ Settings page ══ */
+
+.kfm-settings-wrap { max-width:900px; }
+.kfm-path-prefix   { font-family:monospace; font-size:13px; color:#999; white-space:nowrap; }
+.kfm-resolved-path code { background:#f8f9fa; padding:2px 6px; border-radius:3px; font-size:11px; word-break:break-all; }
+.kfm-info-box      { background:#f8f9fa; border:1px solid #e2e8f0; border-radius:4px; padding:14px 18px; max-width:800px; }
+.kfm-info-box h2   { margin-top:0; font-size:14px; }
+.kfm-info-box li   { margin-bottom:6px; font-size:13px; }
+
+/* ═══════════════════════════════════════════════════ Responsive ══ */
+
+@media ( max-width: 700px ) {
+    .kfm-tree-panel, .kfm-resizer { display:none; }
+    .kfm-col-mtime, .kfm-col-perms { display:none; }
+}
