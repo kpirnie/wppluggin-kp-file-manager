@@ -403,13 +403,23 @@ final class KFM_Plugin {
         }
     }
 
-    /* ------------------------------------------------------------------ */
-    /*  Gutenberg block                                                     */
-    /* ------------------------------------------------------------------ */
-
+    /**
+     * Registers the Gutenberg block for the file manager
+     *
+     * @package KPFileManager
+     * @since 1.0.0
+     * @static
+     * @author Kevin Pirnie <iam@kevinpirnie.com>
+     *
+     * @return void
+     * 
+     */
     public static function register_block(): void {
+        
+        // Check if Gutenberg is available
         if ( ! function_exists( 'register_block_type' ) ) return;
 
+        // Register block assets
         $block_dir  = KFM_PLUGIN_DIR . 'blocks/file-manager/';
         $block_url  = KFM_PLUGIN_URL . 'blocks/file-manager/';
         $asset_file = $block_dir . 'index.asset.php';
@@ -417,10 +427,12 @@ final class KFM_Plugin {
             ? require $asset_file
             : [ 'dependencies' => [ 'wp-blocks', 'wp-block-editor', 'wp-components', 'wp-element', 'wp-i18n' ], 'version' => KFM_VERSION ];
 
+        // Register block editor script and styles
         wp_register_script( 'kfm-block-editor',      $block_url . 'index.js',   $asset['dependencies'], $asset['version'], true );
         wp_register_style(  'kfm-block-editor-style', $block_url . 'editor.css', [], KFM_VERSION );
         wp_register_style(  'kfm-block-style',        $block_url . 'style.css',  [], KFM_VERSION );
 
+        // Register the block type with render callback
         register_block_type( $block_dir, [
             'editor_script'   => 'kfm-block-editor',
             'editor_style'    => 'kfm-block-editor-style',
@@ -429,24 +441,62 @@ final class KFM_Plugin {
         ] );
     }
 
+    /**
+     * Renders the Gutenberg block for the file manager
+     *
+     * @package KPFileManager
+     * @since 1.0.0
+     * @static
+     * @author Kevin Pirnie <iam@kevinpirnie.com>
+     *
+     * @param array $attributes The block attributes
+     * @return string The rendered block HTML
+     * 
+     */
     public static function render_block( array $attributes ): string {
+
+        // start output buffering to capture the included template's output
         ob_start();
         include KFM_PLUGIN_DIR . 'blocks/file-manager/render.php';
+        
+        // return the captured output as the block's rendered content
         return ob_get_clean();
     }
 
-    /* ------------------------------------------------------------------ */
-    /*  Shortcode                                                           */
-    /* ------------------------------------------------------------------ */
-
+    /**
+     * Creates a shortcode for the file manager
+     *
+     * @package KPFileManager
+     * @since 1.0.0
+     * @static
+     * @author Kevin Pirnie <iam@kevinpirnie.com>
+     *
+     * @return void
+     * 
+     */
     public static function maybe_render_frontend(): void {
         add_shortcode( 'kfm_file_manager', [ self::class, 'shortcode' ] );
     }
 
+    /**
+     * Shortcode callback to render the file manager on the frontend
+     *
+     * @package KPFileManager
+     * @since 1.0.0
+     * @static
+     * @author Kevin Pirnie <iam@kevinpirnie.com>
+     * 
+     * @return string The rendered HTML for the file manager or an error message
+     * 
+     */
     public static function shortcode(): string {
+
+        // Permission check – only render if user has access, otherwise show message
         if ( ! KFM_Settings::current_user_allowed() ) {
             return '<p>' . esc_html__( 'You do not have permission to access the File Manager.', 'kfm-file-manager' ) . '</p>';
         }
+
+        // Enqueue necessary assets for the frontend file manager
         self::enqueue_uikit();
         wp_enqueue_code_editor( [ 'type' => 'text/plain' ] );
         wp_enqueue_style(  'wp-codemirror' );
@@ -454,8 +504,12 @@ final class KFM_Plugin {
         wp_enqueue_style(  'kfm-style', KFM_PLUGIN_URL . 'assets/css/kfm-style.css', [ 'uikit', 'wp-codemirror' ], KFM_VERSION );
         wp_enqueue_script( 'kfm-app',   KFM_PLUGIN_URL . 'assets/js/kfm-app.js',     [ 'jquery', 'uikit', 'uikit-icons', 'wp-codemirror' ], KFM_VERSION, true );
         wp_localize_script( 'kfm-app', 'KFM', self::kfm_localize_data() );
+
+        // start output buffering to capture the included template's output
         ob_start();
         include KFM_PLUGIN_DIR . 'templates/file-manager-page.php';
+
+        // return the captured output as the shortcode's rendered content
         return ob_get_clean();
     }
 }
