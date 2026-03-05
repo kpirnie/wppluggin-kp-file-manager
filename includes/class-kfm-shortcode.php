@@ -1,10 +1,12 @@
 <?php
-defined( 'ABSPATH' ) || exit;
+
+// Exit if accessed directly.
+defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
 
 /**
  * Registers and renders the [kfm_file_manager] shortcode for front-end embedding.
  *
- * @package KPFileManager
+ * @package KP - File Manager
  * @since 1.0.0
  * @author Kevin Pirnie <iam@kevinpirnie.com>
  *
@@ -16,7 +18,7 @@ class KFM_Shortcode {
     /**
      * Constructor.
      *
-     * @package KPFileManager
+     * @package KP - File Manager
      * @since 1.0.0
      * @author Kevin Pirnie <iam@kevinpirnie.com>
      *
@@ -30,7 +32,7 @@ class KFM_Shortcode {
     /**
      * Creates a shortcode for the file manager
      *
-     * @package KPFileManager
+     * @package KP - File Manager
      * @since 1.0.0
      * @author Kevin Pirnie <iam@kevinpirnie.com>
      *
@@ -44,7 +46,7 @@ class KFM_Shortcode {
     /**
      * Creates a shortcode for the file manager
      *
-     * @package KPFileManager
+     * @package KP - File Manager
      * @since 1.0.0
      * @author Kevin Pirnie <iam@kevinpirnie.com>
      *
@@ -58,7 +60,7 @@ class KFM_Shortcode {
     /**
      * Shortcode callback to render the file manager on the frontend
      *
-     * @package KPFileManager
+     * @package KP - File Manager
      * @since 1.0.0
      * @author Kevin Pirnie <iam@kevinpirnie.com>
      *

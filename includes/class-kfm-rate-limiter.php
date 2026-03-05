@@ -1,5 +1,6 @@
 <?php
-defined( 'ABSPATH' ) || exit;
+// Exit if accessed directly.
+defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
 
 /**
  * Transient-based rate limiter.

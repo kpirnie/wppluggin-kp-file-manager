@@ -1,5 +1,6 @@
 <?php
-defined( 'ABSPATH' ) || exit;
+// Exit if accessed directly.
+defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
 
 /**
  * Performs all filesystem operations, always sandboxed inside the configured base path.

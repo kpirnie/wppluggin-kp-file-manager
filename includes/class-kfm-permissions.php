@@ -1,5 +1,6 @@
 <?php
-defined( 'ABSPATH' ) || exit;
+// Exit if accessed directly.
+defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
 
 /**
  * Per-role operation permission matrix.

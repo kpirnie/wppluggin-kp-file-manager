@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       KP – File Manager
  * Plugin URI:        https://kevinpirnie.com
- * Description:       A secure, role-aware file manager for WordPress with a built-in CodeMirror text editor. All operations are sandboxed inside wp-content.
+ * Description:       A secure file manager for WordPress with a built-in CodeMirror text editor. All operations are sandboxed inside wp-content.
  * Version:           1.0.57
  * Requires at least: 6.0
  * Requires PHP:      8.2
@@ -12,7 +12,7 @@
  */
 
 // Exit if accessed directly.
-defined( 'ABSPATH' ) || die( 'No script kiddies please!' );
+defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
 
 // Define constants.
 define( 'KFM_VERSION',    '1.0.57' );
@@ -42,7 +42,7 @@ if( !class_exists('KFM_Plugin') ) {
      * Handles initialization, admin menu, asset loading, Gutenberg block registration,
      * and shortcode rendering.
      *
-     * @package KPFileManager
+     * @package KP - File Manager
      * @since 1.0.0
      * @author Kevin Pirnie <iam@kevinpirnie.com>
      *
@@ -53,7 +53,7 @@ if( !class_exists('KFM_Plugin') ) {
          * Initializes the plugin: registers settings, AJAX handlers, admin menu, assets, and Gutenberg block.
          * This method is hooked to 'plugins_loaded' to ensure it runs after all plugins are loaded
          *
-         * @package KPFileManager
+         * @package KP - File Manager
          * @since 1.0.0
          * @static
          * @author Kevin Pirnie <iam@kevinpirnie.com>

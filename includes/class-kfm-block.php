@@ -1,10 +1,11 @@
 <?php
-defined( 'ABSPATH' ) || exit;
+// Exit if accessed directly.
+defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
 
 /**
  * Handles Gutenberg block registration and server-side rendering for KFM.
  *
- * @package KPFileManager
+ * @package KP - File Manager
  * @since 1.0.0
  * @author Kevin Pirnie <iam@kevinpirnie.com>
  *
@@ -15,7 +16,7 @@ class KFM_Block {
      * Wires up the WordPress init hook for block registration.
      * Called once during plugin boot.
      *
-     * @package KPFileManager
+     * @package KP - File Manager
      * @since 1.0.0
      * @author Kevin Pirnie <iam@kevinpirnie.com>
      *
@@ -29,7 +30,7 @@ class KFM_Block {
     /**
      * Registers the Gutenberg block for the file manager
      *
-     * @package KPFileManager
+     * @package KP - File Manager
      * @since 1.0.0
      * @author Kevin Pirnie <iam@kevinpirnie.com>
      *
@@ -66,7 +67,7 @@ class KFM_Block {
     /**
      * Renders the Gutenberg block for the file manager
      *
-     * @package KPFileManager
+     * @package KP - File Manager
      * @since 1.0.0
      * @author Kevin Pirnie <iam@kevinpirnie.com>
      *
