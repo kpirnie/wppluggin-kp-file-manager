@@ -16,6 +16,7 @@ class KFM_Settings {
     const OPTION_AUDIT_ALERTS  = 'kfm_audit_email_alerts';
     const OPTION_LOG_ENTRIES   = 'kfm_log_max_entries';
     const OPTION_ALERT_EMAILS  = 'kfm_alert_emails';
+    const OPTION_DISABLED_SITES = 'kfm_disabled_sites';
 
     public function register(): void {
         add_action( 'admin_init', [ $this, 'register_settings' ] );
@@ -28,7 +29,7 @@ class KFM_Settings {
             self::OPTION_PATH          => [ 'string', [ $this, 'sanitize_path' ],        '' ],
             self::OPTION_SHOW_DOTFILES => [ 'string', 'sanitize_text_field',             '0' ],
             self::OPTION_LOG_ENTRIES  => [ 'integer', [ $this, 'sanitize_log_entries' ],  100 ],
-
+            self::OPTION_DISABLED_SITES => [ 'array', [ $this, 'sanitize_disabled_sites' ], [] ],
         ];
         foreach ( $general as $key => $args ) {
             register_setting( 'kfm_options_group', $key, [
@@ -55,6 +56,7 @@ class KFM_Settings {
             ] );
         }
     }
+
 
     /* ------------------------------------------------------------------ */
     /*  Defaults                                                            */
@@ -138,6 +140,22 @@ class KFM_Settings {
     public function sanitize_alert_emails( string $value ): string {
         $emails = array_filter( array_map( 'trim', explode( ';', $value ) ), 'is_email' );
         return implode( ';', $emails );
+    }
+
+    /**
+     * Sanitizes the disabled sites array.
+     *
+     * @package KP - File Manager
+     * @since 1.0.0
+     * @author Kevin Pirnie <iam@kevinpirnie.com>
+     *
+     * @param mixed $value
+     * @return array
+     *
+     */
+    public function sanitize_disabled_sites( $value ): array {
+        if ( ! is_array( $value ) ) return [];
+        return array_values( array_map( 'absint', $value ) );
     }
 
     /* ------------------------------------------------------------------ */

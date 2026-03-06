@@ -32,8 +32,23 @@ spl_autoload_register( function ( string $class_name ): void {
 } );
 
 // Initialize the plugin.
-add_action( 'plugins_loaded', [ 'KFM_Plugin', 'init' ] );
-add_action( 'network_admin_notices',  [ 'KFM_Plugin', 'init' ] );
+add_action( 'init', function() {
+    if ( is_multisite()
+        && is_plugin_active_for_network( plugin_basename( __FILE__ ) )
+        && ! is_network_admin()
+    ) {
+        // For AJAX requests originating from the network admin, skip the site check
+        $referer = wp_get_referer();
+        $is_network_ajax = wp_doing_ajax() && $referer
+            && strpos( $referer, network_admin_url() ) === 0;
+
+        if ( ! $is_network_ajax ) {
+            $disabled = get_site_option( 'kfm_disabled_sites', [] );
+            if ( in_array( (int) get_current_blog_id(), (array) $disabled, true ) ) return;
+        }
+    }
+    KFM_Plugin::init();
+} );
 
 // make sure the class is only defined once, in case of multiple includes or autoloading issues
 if( !class_exists('KFM_Plugin') ) {

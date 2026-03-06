@@ -201,7 +201,19 @@ if( !class_exists('KFM_Admin_Menu') ) {
         public function render_settings(): void {
 
             // Permission check
-            if ( ! current_user_can( 'manage_options' ) ) wp_die( __( 'Insufficient permissions.', 'kpfm' ) );
+            if ( ! current_user_can( 'manage_options' ) && ! current_user_can( 'manage_network_options' ) ) {
+                wp_die( __( 'Insufficient permissions.', 'kpfm' ) );
+            }
+
+            // Handle network admin save
+            if ( is_network_admin() && isset( $_POST['kfm_network_save'] ) ) {
+                check_admin_referer( 'kfm_network_save' );
+                $disabled = isset( $_POST['kfm_disabled_sites'] )
+                    ? array_values( array_map( 'absint', (array) $_POST['kfm_disabled_sites'] ) )
+                    : [];
+                update_site_option( 'kfm_disabled_sites', $disabled );
+                add_settings_error( 'kfm_options_group', 'saved', __( 'Settings saved.', 'kpfm' ), 'updated' );
+            }
 
             // Render the settings page
             include KFM_PLUGIN_DIR . 'templates/settings-general.php';
