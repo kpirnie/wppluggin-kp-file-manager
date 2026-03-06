@@ -399,14 +399,24 @@ if( !class_exists('KFM_Ajax') ) {
             // Log the download
             KFM_Audit_Log::write( 'kfm_download', $rel, 'ok' );
 
-            // Stream the file
+            // Read via WP_Filesystem then stream to browser
+            $data = $this->fm->read_file( $rel );
+            if ( is_wp_error( $data ) ) {
+                wp_send_json_error( [ 'message' => $data->get_error_message() ], 500 );
+            }
+
             nocache_headers();
             header( 'Content-Type: ' . $mime );
             header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
             header( 'Content-Length: ' . $size );
             header( 'X-Content-Type-Options: nosniff' );
-            flush();
-            readfile( $path );
+
+            // Flush any output buffers before sending the file contents
+            while ( ob_get_level() ) {
+                ob_end_clean();
+            }
+
+            echo $data['content']; // phpcs:ignore WordPress.Security.EscapeOutput
             exit;
         }
 

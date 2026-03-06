@@ -28,7 +28,6 @@
     var CHMOD_FLOOR     = KFM.chmodFloor ? parseInt( KFM.chmodFloor, 8 ) : 0;
 
     var DANGEROUS_NAMES = [ '.htaccess', '.htpasswd', '.env', '.user.ini', 'php.ini', 'web.config' ];
-
     var DANGEROUS_FN_RE = /\b(eval|base64_decode|exec|system|passthru|shell_exec|popen|proc_open|assert)\s*\(/i;
 
     function validateUploadFiles( files ) {
@@ -96,6 +95,7 @@
         return new Date( ts * 1000 ).toLocaleString();
     }
 
+    // Brief status bar message — auto-clears after 4 seconds
     function setStatus( msg ) {
         var $s = $( '#kfm-status' );
         $s.text( msg );
@@ -103,6 +103,14 @@
         if ( msg ) $s.data( 'timer', setTimeout( function () { $s.text( '' ); }, 4000 ) );
     }
 
+    // Normalise any error value to a plain string
+    function errMsg( err ) {
+        if ( typeof err === 'string' ) return err;
+        if ( err && err.message ) return err.message;
+        return KFM.i18n.errorGeneric || 'An error occurred.';
+    }
+
+    // Wrapper around $.ajax — always resolves/rejects with plain data or a string message
     function ajax( action, data, method ) {
         return $.ajax( {
             url    : KFM.ajaxUrl,
@@ -114,7 +122,7 @@
             );
             return r.data;
         }, function ( xhr, status, err ) {
-            // Network or server error — extract a readable message
+            // Network or server-level failure — extract the most useful message available
             var msg = ( KFM.i18n.errorGeneric || 'An error occurred.' );
             try {
                 var json = JSON.parse( xhr.responseText );
@@ -126,16 +134,11 @@
         } );
     }
 
-    function errMsg( err ) {
-        if ( typeof err === 'string' ) return err;
-        if ( err && err.message ) return err.message;
-        return KFM.i18n.errorGeneric || 'An error occurred.';
-    }
-
     function esc( str ) {
         return $( '<div>' ).text( String( str || '' ) ).html();
     }
 
+    // UIKit notification — success or danger only, no intermediate states
     function notify( msg, status, timeout ) {
         UIkit.notification( {
             message : msg,
@@ -196,24 +199,24 @@
         updateToolbarState();
 
         items.forEach( function ( item ) {
-            var ico    = iconFor( item );
-            var isDir  = item.type === 'dir';
-            var isRO   = ! isDir && READONLY_EXTS.indexOf( item.ext ) !== -1;
+            var ico   = iconFor( item );
+            var isDir = item.type === 'dir';
+            var isRO  = ! isDir && READONLY_EXTS.indexOf( item.ext ) !== -1;
 
             var nameCell = isDir
                 ? '<a href="#" class="kfm-dir-link" data-rel="' + esc( item.rel ) + '">' + esc( item.name ) + '</a>'
                 : '<a href="#" class="kfm-file-link" data-rel="' + esc( item.rel ) + '">' + esc( item.name ) + '</a>'
                   + ( isRO ? ' <span class="kfm-badge-ro" title="Read-only">RO</span>' : '' );
 
-            var editBtn = ( isDir || isRO ) ? '' :
-                '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="Edit">' +
-                    '<span uk-icon="icon:pencil;ratio:0.75"></span>' +
-                '</button>';
-
             var downloadBtn = isDir ? '' :
                 '<a class="kfm-row-btn kfm-btn-download" href="' + esc( KFM.ajaxUrl ) + '?action=kfm_download&nonce=' + esc( KFM.nonce ) + '&path=' + encodeURIComponent( item.rel ) + '" title="Download" download>' +
                     '<span uk-icon="icon:download;ratio:0.75"></span>' +
                 '</a>';
+
+            var editBtn = ( isDir || isRO ) ? '' :
+                '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="Edit">' +
+                    '<span uk-icon="icon:pencil;ratio:0.75"></span>' +
+                '</button>';
 
             $tbody.append(
                 '<tr data-rel="' + esc( item.rel ) + '" data-type="' + item.type + '">' +
@@ -277,6 +280,7 @@
             renderBreadcrumbs( data.breadcrumbs );
             sortAndRender();
             setStatus( '' );
+            // Render the tree once on first load
             if ( rel === '' && $( '#kfm-tree' ).is( ':empty' ) ) renderTree( '', $( '#kfm-tree' ) );
         } ).catch( function ( err ) {
             var msg = errMsg( err );
@@ -350,14 +354,12 @@
 
     /* ───────────────────────────────────────── Editor / save ── */
 
-    var _savingNotif = null;
-
     function saveEditor() {
         if ( ! state.editorCM || ! state.editorRel ) return;
 
         var content = state.editorCM.getValue();
 
-        // Warn on dangerous functions in PHP/JS files
+        // Warn if potentially dangerous functions are detected in executable file types
         var ext = ( state.editorRel.split( '.' ).pop() || '' ).toLowerCase();
         if ( [ 'php', 'js', 'sh' ].indexOf( ext ) !== -1 && DANGEROUS_FN_RE.test( content ) ) {
             if ( ! window.confirm( ( KFM.i18n && KFM.i18n.warnDangerousFn ) || "This file contains potentially dangerous functions.\n\nSave anyway?" ) ) {
@@ -365,26 +367,16 @@
             }
         }
 
-        if ( _savingNotif ) { try { _savingNotif.close( true ); } catch(e) {} }
-        _savingNotif = UIkit.notification( {
-            message : '<span uk-spinner="ratio:0.6"></span>&nbsp; Saving\u2026',
-            status  : 'primary',
-            timeout : 0,
-            pos     : 'top-center',
-        } );
-
         ajax( 'kfm_write', { path: state.editorRel, content: content } ).then( function () {
-            if ( _savingNotif ) { try { _savingNotif.close( true ); } catch(e) {} _savingNotif = null; }
             notify( '<span uk-icon="icon:check;ratio:0.85"></span>&nbsp; ' + ( ( KFM.i18n && KFM.i18n.saved ) ? KFM.i18n.saved : 'File saved.' ), 'success', 3000 );
+            loadDir( state.currentPath );
         } ).catch( function ( err ) {
-            if ( _savingNotif ) { try { _savingNotif.close( true ); } catch(e) {} _savingNotif = null; }
             notify( '<span uk-icon="icon:warning;ratio:0.85"></span>&nbsp; ' + esc( errMsg( err ) ), 'danger', 0 );
         } );
     }
 
     function openEditor( rel ) {
-        // Client-side readonly check
-        var ext = ( rel.split( '.' ).pop() || '' ).toLowerCase();
+        var ext  = ( rel.split( '.' ).pop() || '' ).toLowerCase();
         var isRO = READONLY_EXTS.indexOf( ext ) !== -1;
 
         state.editorRel = rel;
@@ -401,6 +393,13 @@
             modal.show();
 
             UIkit.util.once( document, 'shown', function () {
+                // CodeMirror may not be available in all contexts (e.g. network admin)
+                if ( ! wp.codeEditor || ! wp.codeEditor.initialize ) {
+                    state.editorCM = null;
+                    $( '#kfm-editor-textarea' ).show();
+                    return;
+                }
+
                 var mimeMap = {
                     php:'application/x-httpd-php', js:'text/javascript', json:'application/json',
                     css:'text/css', html:'text/html', htm:'text/html', xml:'text/xml',
@@ -426,7 +425,9 @@
                 setTimeout( function () { state.editorCM.refresh(); }, 50 );
             }, { self: false, filter: '#kfm-editor-modal' } );
 
-        } ).catch( function ( err ) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
+        } ).catch( function ( err ) {
+            notify( esc( errMsg( err ) ), 'danger', 0 );
+        } );
     }
 
     /* ─────────────────────────────────────────── Permissions ── */
@@ -455,7 +456,7 @@
     /* ─────────────────────────────────────────────── Upload ── */
 
     function uploadFiles( files ) {
-        // Client-side validation first
+        // Client-side validation before anything hits the server
         var rejected = validateUploadFiles( files );
         if ( rejected.length ) {
             notify(
@@ -468,6 +469,8 @@
 
         var dir = state.currentPath;
         var p   = $.when();
+
+        // Chain uploads sequentially so the directory refresh happens once at the end
         Array.from( files ).forEach( function ( file ) {
             p = p.then( function () {
                 var fd = new FormData();
@@ -505,7 +508,7 @@
 
     function bindEvents() {
 
-        /* Navigation */
+        /* ── Navigation ── */
         $( '#kfm-breadcrumb' ).on( 'click', 'a[data-rel]', function (e) { e.preventDefault(); loadDir( $( this ).data( 'rel' ) ); } );
         $( '#kfm-tbody' ).on( 'click', '.kfm-dir-link', function (e) { e.preventDefault(); loadDir( $( this ).data( 'rel' ) ); } );
         $( '#kfm-tree' ).on( 'click', '.kfm-tree-link', function (e) {
@@ -515,7 +518,7 @@
             $( this ).addClass( 'kfm-tree-link-active' );
         } );
 
-        /* Selection */
+        /* ── Selection ── */
         $( '#kfm-tbody' ).on( 'change', '.kfm-row-check', function () {
             $( this ).is( ':checked' ) ? state.selected.add( $( this ).val() ) : state.selected.delete( $( this ).val() );
             updateToolbarState();
@@ -528,7 +531,7 @@
             updateToolbarState();
         } );
 
-        /* Sorting */
+        /* ── Sorting ── */
         $( '#kfm-table thead' ).on( 'click', '.kfm-sortable', function () {
             var col = $( this ).data( 'sort' );
             if ( state.sortCol === col ) state.sortAsc = ! state.sortAsc;
@@ -538,11 +541,11 @@
             sortAndRender();
         } );
 
-        /* Refresh / theme */
+        /* ── Refresh / theme ── */
         $( '#kfm-btn-refresh' ).on( 'click', function () { loadDir( state.currentPath ); } );
         $( '#kfm-btn-theme' ).on( 'click', toggleTheme );
 
-        /* New file / folder */
+        /* ── New file / folder ── */
         $( '#kfm-btn-new-file' ).on( 'click', function () {
             promptModal( 'New File', 'File name:' ).then( function (name) {
                 ajax( 'kfm_create_file', { dir: state.currentPath, name: name } ).then( function () {
@@ -560,11 +563,11 @@
             } ).catch( function () {} );
         } );
 
-        /* Upload */
+        /* ── Upload ── */
         $( '#kfm-btn-upload' ).on( 'click', function () { $( '#kfm-file-input' ).click(); } );
         $( '#kfm-file-input' ).on( 'change', function () { if ( this.files.length ) uploadFiles( this.files ); } );
 
-        /* Drag & drop */
+        /* ── Drag & drop ── */
         var $wrap = $( '#kfm-wrap' );
         $wrap.on( 'dragover', function (e) { e.preventDefault(); $( '#kfm-dropzone' ).addClass( 'kfm-dropzone-active' ); } );
         $wrap.on( 'dragleave drop', function (e) { e.preventDefault(); $( '#kfm-dropzone' ).removeClass( 'kfm-dropzone-active' ); } );
@@ -573,7 +576,7 @@
             if ( files.length ) uploadFiles( files );
         } );
 
-        /* Editor */
+        /* ── Editor ── */
         $( '#kfm-tbody' ).on( 'click', '.kfm-btn-edit', function () { openEditor( $( this ).data( 'rel' ) ); } );
         $( '#kfm-tbody' ).on( 'dblclick', 'tr[data-type="file"]', function () {
             var rel = $( this ).data( 'rel' );
@@ -584,11 +587,12 @@
         $( '#kfm-tbody' ).on( 'click', '.kfm-file-link', function (e) { e.preventDefault(); openEditor( $( this ).data( 'rel' ) ); } );
         $( '#kfm-editor-save' ).on( 'click', saveEditor );
 
+        // Clean up CodeMirror instance when the editor modal closes
         UIkit.util.on( '#kfm-editor-modal', 'hidden', function () {
             if ( state.editorCM ) { try { state.editorCM.toTextArea(); } catch(e) {} state.editorCM = null; }
         } );
 
-        /* Copy / Cut / Paste */
+        /* ── Copy / Cut / Paste ── */
         $( '#kfm-btn-copy' ).on( 'click', function () {
             if ( ! state.selected.size ) return;
             state.clipboard = { paths: Array.from( state.selected ), op: 'copy' };
@@ -615,7 +619,7 @@
             } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
         } );
 
-        /* Rename (toolbar) */
+        /* ── Rename (toolbar) ── */
         $( '#kfm-btn-rename' ).on( 'click', function () {
             if ( state.selected.size !== 1 ) { notify( 'Select exactly one item to rename.', 'warning', 2500 ); return; }
             var rel  = Array.from( state.selected )[0];
@@ -628,7 +632,7 @@
             } ).catch( function () {} );
         } );
 
-        /* Rename (row) */
+        /* ── Rename (row button) ── */
         $( '#kfm-tbody' ).on( 'click', '.kfm-btn-rename2', function () {
             var rel = $( this ).data( 'rel' ), name = $( this ).data( 'name' );
             promptModal( 'Rename', 'New name:', name ).then( function (newName) {
@@ -639,7 +643,7 @@
             } ).catch( function () {} );
         } );
 
-        /* Delete */
+        /* ── Delete ── */
         function doDelete( paths ) {
             if ( ! paths.length ) return;
             if ( ! window.confirm( KFM.i18n.confirmDelete || 'Delete selected item(s)?' ) ) return;
@@ -653,7 +657,7 @@
         $( '#kfm-btn-delete' ).on( 'click', function () { doDelete( Array.from( state.selected ) ); } );
         $( '#kfm-tbody' ).on( 'click', '.kfm-btn-del', function () { doDelete( [ $( this ).data( 'rel' ) ] ); } );
 
-        /* Permissions (toolbar) */
+        /* ── Permissions (toolbar) ── */
         $( '#kfm-btn-chmod' ).on( 'click', function () {
             if ( state.selected.size !== 1 ) { notify( 'Select exactly one item.', 'warning', 2500 ); return; }
             var rel  = Array.from( state.selected )[0];
@@ -661,12 +665,12 @@
             openChmod( rel, item ? item.perms : '0644' );
         } );
 
-        /* Permissions (row) */
+        /* ── Permissions (row button) ── */
         $( '#kfm-tbody' ).on( 'click', '.kfm-btn-perm', function () {
             openChmod( $( this ).data( 'rel' ), $( this ).data( 'perms' ) );
         } );
 
-        /* chmod modal */
+        /* ── chmod modal ── */
         $( '#kfm-chmod-modal' ).on( 'change', '.kfm-perm', function () {
             $( '#kfm-chmod-octal' ).val( checkboxesToOctal() );
         } );
@@ -682,7 +686,7 @@
                 notify( 'Permissions cannot be set below the minimum floor (' + KFM.chmodFloor + ').', 'warning', 0 );
                 return;
             }
-            // World-writable warning
+            // World-writable is always blocked
             if ( parseInt( mode, 8 ) & 0o002 ) {
                 notify( 'World-writable permissions are not allowed.', 'danger', 0 );
                 return;

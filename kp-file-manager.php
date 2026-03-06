@@ -32,7 +32,7 @@ spl_autoload_register( function ( string $class_name ): void {
 } );
 
 // Initialize the plugin.
-add_action( 'init', function() {
+add_action( 'plugins_loaded', function() {
     if ( is_multisite()
         && is_plugin_active_for_network( plugin_basename( __FILE__ ) )
         && ! is_network_admin()

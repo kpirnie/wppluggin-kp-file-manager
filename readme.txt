@@ -3,7 +3,7 @@ Contributors: kevp75
 Donate link: https://paypal.me/kevinpirnie
 Tags: file manager, file browser, code editor, file upload, wp-content
 Requires at least: 6.0
-Tested up to: 67.0
+Tested up to: 7.0
 Requires PHP: 8.2
 Stable tag: 1.0.57
 License: GPLv3

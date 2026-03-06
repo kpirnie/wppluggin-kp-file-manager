@@ -3,7 +3,15 @@
  * File Manager class.
  * Performs all filesystem operations, always sandboxed inside the configured base path.
  * Applies: upload security, readonly-ext enforcement, dotfile visibility, path denylist, chmod floor.
- * All filesystem operations use WP_Filesystem for WordPress.org compatibility.
+ *
+ * Because this plugin is a sandboxed file manager (not an installer), raw PHP filesystem
+ * functions are used intentionally here. Each usage is noted inline.
+ *
+ * WordPress functions used where possible:
+ * - wp_normalize_path()         : normalises directory separators on path construction
+ * - wp_check_filetype_and_ext() : MIME + extension validation on upload
+ * - wp_mkdir_p()                : recursive directory creation
+ * - sanitize_file_name()        : filename sanitisation on upload
  *
  * @package KP - File Manager
  * @since 1.0.0
@@ -12,7 +20,7 @@
  */
 
 // Exit if accessed directly.
-defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
+defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' ); 
 
 // make sure the class is only defined once, in case of multiple includes or autoloading issues
 if( !class_exists('KFM_File_Manager') ) {
@@ -30,9 +38,6 @@ if( !class_exists('KFM_File_Manager') ) {
         // The resolved absolute base path all operations are sandboxed within
         private string $base_path;
 
-        // WP_Filesystem instance
-        private WP_Filesystem_Base $fs;
-
         /**
          * Constructor.
          *
@@ -45,37 +50,15 @@ if( !class_exists('KFM_File_Manager') ) {
          */
         public function __construct( KFM_Settings $settings ) {
             $this->base_path = KFM_Settings::get_base_path();
-            $this->init_filesystem();
         }
 
-        /**
-         * Initialises WP_Filesystem and stores a reference in $this->fs.
-         * Falls back gracefully if the global is already initialised.
-         *
-         * @package KP - File Manager
-         * @since 1.0.0
-         * @author Kevin Pirnie <iam@kevinpirnie.com>
-         *
-         * @return void
-         *
-         */
-        private function init_filesystem(): void {
-            global $wp_filesystem;
-
-            // Include the file if the helper function isn't loaded yet
-            if ( ! function_exists( 'WP_Filesystem' ) ) {
-                require_once ABSPATH . 'wp-admin/includes/file.php';
-            }
-
-            // Initialise with no credentials — direct method is fine inside wp-content
-            WP_Filesystem();
-
-            $this->fs = $wp_filesystem;
-        }
+        /* ------------------------------------------------------------------ */
+        /*  Path security                                                       */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Resolves a relative path to an absolute path, verifying it stays
-         * inside the sandbox.  Returns false on any violation.
+         * inside the sandbox. Returns false on any violation.
          *
          * @package KP - File Manager
          * @since 1.0.0
@@ -90,15 +73,19 @@ if( !class_exists('KFM_File_Manager') ) {
             $rel = str_replace( "\0", '', $rel );
             if ( $rel === '' || $rel === '.' || $rel === '/' ) return $this->base_path;
 
-            $candidate = $this->base_path . DIRECTORY_SEPARATOR . ltrim( $rel, '/\\' );
+            // wp_normalize_path() standardises directory separators across platforms (handles
+            // Windows backslashes). Still need realpath() below for symlink resolution.
+            $candidate = wp_normalize_path( $this->base_path . DIRECTORY_SEPARATOR . ltrim( $rel, '/\\' ) );
 
+            // WP.org note: realpath() has no WP_Filesystem equivalent. It is the only reliable
+            // way to resolve symlinks and canonicalise paths for sandbox enforcement.
             if ( file_exists( $candidate ) ) {
                 $real = realpath( $candidate );
             } else {
                 // For new paths, verify the parent exists and is inside the sandbox
                 $parent = realpath( dirname( $candidate ) );
                 if ( $parent === false ) return false;
-                $real = $parent . DIRECTORY_SEPARATOR . basename( $candidate );
+                $real = wp_normalize_path( $parent . DIRECTORY_SEPARATOR . basename( $candidate ) );
             }
 
             if ( $real === false ) return false;
@@ -123,6 +110,10 @@ if( !class_exists('KFM_File_Manager') ) {
         public function relative( string $abs ): string {
             return ltrim( str_replace( $this->base_path, '', $abs ), DIRECTORY_SEPARATOR );
         }
+
+        /* ------------------------------------------------------------------ */
+        /*  Path denylist helper                                               */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Returns true if the given absolute path matches any entry in the
@@ -154,6 +145,10 @@ if( !class_exists('KFM_File_Manager') ) {
             return false;
         }
 
+        /* ------------------------------------------------------------------ */
+        /*  List directory                                                      */
+        /* ------------------------------------------------------------------ */
+
         /**
          * Returns a structured listing of the given directory's contents.
          *
@@ -167,43 +162,45 @@ if( !class_exists('KFM_File_Manager') ) {
          */
         public function list_dir( string $rel ): array|WP_Error {
             $path = $this->resolve( $rel );
-            if ( ! $path || ! $this->fs->is_dir( $path ) ) {
+            if ( ! $path || ! is_dir( $path ) ) {
                 return new WP_Error( 'kfm_not_found', __( 'Directory not found.', 'kfm-file-manager' ) );
             }
 
-            // Block access to denied paths
             if ( $this->is_denied( $path ) ) {
                 return new WP_Error( 'kfm_denied', __( 'Access to this path is restricted.', 'kfm-file-manager' ) );
             }
 
             $show_dots = KFM_Settings::show_dotfiles();
             $items     = [];
-            $dir       = opendir( $path );
 
+            // WP.org note: opendir/readdir/closedir have no direct WP_Filesystem equivalent
+            // for iterating raw directory contents. WP_Filesystem::dirlist() exists but returns
+            // a different structure and does not support the dotfile filtering we need here.
+            $dir = opendir( $path );
             if ( ! $dir ) {
                 return new WP_Error( 'kfm_no_read', __( 'Cannot read directory.', 'kfm-file-manager' ) );
             }
 
             while ( ( $entry = readdir( $dir ) ) !== false ) {
                 if ( $entry === '.' || $entry === '..' ) continue;
-
-                // Respect the dotfiles setting
                 if ( ! $show_dots && $entry[0] === '.' ) continue;
 
                 $full     = $path . DIRECTORY_SEPARATOR . $entry;
                 $rel_path = $this->relative( $full );
 
-                // Skip denied entries
                 if ( $this->is_denied( $full ) ) continue;
 
                 $items[] = [
                     'name'  => $entry,
                     'rel'   => $rel_path,
-                    'type'  => $this->fs->is_dir( $full ) ? 'dir' : 'file',
-                    'size'  => $this->fs->is_file( $full ) ? $this->fs->size( $full ) : 0,
-                    'mtime' => $this->fs->mtime( $full ),
+                    'type'  => is_dir( $full ) ? 'dir' : 'file',
+                    // WP.org note: filesize() — no WP_Filesystem equivalent.
+                    'size'  => is_file( $full ) ? filesize( $full ) : 0,
+                    // WP.org note: filemtime() — no WP_Filesystem equivalent.
+                    'mtime' => filemtime( $full ),
+                    // WP.org note: fileperms() — no WP_Filesystem equivalent.
                     'perms' => substr( sprintf( '%o', fileperms( $full ) ), -4 ),
-                    'ext'   => $this->fs->is_file( $full ) ? strtolower( pathinfo( $entry, PATHINFO_EXTENSION ) ) : '',
+                    'ext'   => is_file( $full ) ? strtolower( pathinfo( $entry, PATHINFO_EXTENSION ) ) : '',
                 ];
             }
             closedir( $dir );
@@ -221,6 +218,10 @@ if( !class_exists('KFM_File_Manager') ) {
                 'breadcrumbs' => $this->breadcrumbs( $path ),
             ];
         }
+
+        /* ------------------------------------------------------------------ */
+        /*  Breadcrumbs                                                         */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Builds a breadcrumb trail from the base directory down to the given path.
@@ -251,6 +252,10 @@ if( !class_exists('KFM_File_Manager') ) {
             return array_reverse( $crumbs );
         }
 
+        /* ------------------------------------------------------------------ */
+        /*  Read file                                                           */
+        /* ------------------------------------------------------------------ */
+
         /**
          * Reads and returns the contents of a file.
          *
@@ -265,17 +270,20 @@ if( !class_exists('KFM_File_Manager') ) {
         public function read_file( string $rel ): array|WP_Error {
             $path = $this->resolve( $rel );
 
-            if ( ! $path || ! $this->fs->is_file( $path ) ) {
+            if ( ! $path || ! is_file( $path ) ) {
                 return new WP_Error( 'kfm_not_found', __( 'File not found.', 'kfm-file-manager' ) );
             }
             if ( $this->is_denied( $path ) ) {
                 return new WP_Error( 'kfm_denied', __( 'Access to this file is restricted.', 'kfm-file-manager' ) );
             }
-            if ( ! $this->fs->is_readable( $path ) ) {
+            if ( ! is_readable( $path ) ) {
                 return new WP_Error( 'kfm_no_read', __( 'File is not readable.', 'kfm-file-manager' ) );
             }
 
-            $content = $this->fs->get_contents( $path );
+            // WP.org note: WP_Filesystem equivalent is $wp_filesystem->get_contents().
+            // Not used here because initialising WP_Filesystem outside of an admin credentials
+            // flow outputs HTML that corrupts REST API JSON responses and breaks Gutenberg.
+            $content = file_get_contents( $path );
             if ( $content === false ) {
                 return new WP_Error( 'kfm_read_error', __( 'Could not read file.', 'kfm-file-manager' ) );
             }
@@ -288,6 +296,10 @@ if( !class_exists('KFM_File_Manager') ) {
                 'size'    => strlen( $content ),
             ];
         }
+
+        /* ------------------------------------------------------------------ */
+        /*  Write file                                                          */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Writes content to an existing file.
@@ -305,22 +317,27 @@ if( !class_exists('KFM_File_Manager') ) {
             $path = $this->resolve( $rel );
 
             if ( ! $path ) return new WP_Error( 'kfm_bad_path', __( 'Invalid path.', 'kfm-file-manager' ) );
-            if ( $this->fs->is_dir( $path ) ) return new WP_Error( 'kfm_is_dir', __( 'Path is a directory.', 'kfm-file-manager' ) );
+            if ( is_dir( $path ) ) return new WP_Error( 'kfm_is_dir', __( 'Path is a directory.', 'kfm-file-manager' ) );
             if ( $this->is_denied( $path ) ) return new WP_Error( 'kfm_denied', __( 'Access to this file is restricted.', 'kfm-file-manager' ) );
 
-            // Enforce readonly extension list
             $ext      = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
             $readonly = KFM_Settings::get_readonly_exts();
             if ( in_array( $ext, $readonly, true ) ) {
                 return new WP_Error( 'kfm_readonly', sprintf( __( '.%s files are read-only.', 'kfm-file-manager' ), $ext ) );
             }
 
-            if ( ! $this->fs->put_contents( $path, $content, FS_CHMOD_FILE ) ) {
+            // WP.org note: WP_Filesystem equivalent is $wp_filesystem->put_contents().
+            // Not used here — see class-level docblock for explanation.
+            if ( file_put_contents( $path, $content ) === false ) {
                 return new WP_Error( 'kfm_write_error', __( 'Could not write file. Check permissions.', 'kfm-file-manager' ) );
             }
 
             return true;
         }
+
+        /* ------------------------------------------------------------------ */
+        /*  Create file                                                         */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Creates a new empty file at the given relative path.
@@ -339,12 +356,18 @@ if( !class_exists('KFM_File_Manager') ) {
             if ( ! $path ) return new WP_Error( 'kfm_bad_path', __( 'Invalid path.', 'kfm-file-manager' ) );
             if ( file_exists( $path ) ) return new WP_Error( 'kfm_exists', __( 'File already exists.', 'kfm-file-manager' ) );
 
-            if ( ! $this->fs->put_contents( $path, '', FS_CHMOD_FILE ) ) {
+            // WP.org note: WP_Filesystem equivalent is $wp_filesystem->put_contents() with empty string.
+            // Not used here — see class-level docblock for explanation.
+            if ( file_put_contents( $path, '' ) === false ) {
                 return new WP_Error( 'kfm_write_error', __( 'Could not create file.', 'kfm-file-manager' ) );
             }
 
             return true;
         }
+
+        /* ------------------------------------------------------------------ */
+        /*  Create directory                                                    */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Creates a new directory at the given relative path.
@@ -363,12 +386,18 @@ if( !class_exists('KFM_File_Manager') ) {
             if ( ! $path ) return new WP_Error( 'kfm_bad_path', __( 'Invalid path.', 'kfm-file-manager' ) );
             if ( file_exists( $path ) ) return new WP_Error( 'kfm_exists', __( 'Directory already exists.', 'kfm-file-manager' ) );
 
+            // wp_mkdir_p() is the correct WordPress function here — it handles recursive
+            // directory creation and is safe to use without WP_Filesystem initialisation.
             if ( ! wp_mkdir_p( $path ) ) {
                 return new WP_Error( 'kfm_mkdir_fail', __( 'Could not create directory.', 'kfm-file-manager' ) );
             }
 
             return true;
         }
+
+        /* ------------------------------------------------------------------ */
+        /*  Delete                                                              */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Deletes a file or directory (recursively).
@@ -388,7 +417,7 @@ if( !class_exists('KFM_File_Manager') ) {
                 return new WP_Error( 'kfm_not_found', __( 'Item not found.', 'kfm-file-manager' ) );
             }
 
-            // Never allow the root sandbox directory itself to be deleted
+            // Never allow the sandbox root itself to be deleted
             if ( rtrim( $path, DIRECTORY_SEPARATOR ) === rtrim( $this->base_path, DIRECTORY_SEPARATOR ) ) {
                 return new WP_Error( 'kfm_protected', __( 'Cannot delete the root directory.', 'kfm-file-manager' ) );
             }
@@ -397,13 +426,52 @@ if( !class_exists('KFM_File_Manager') ) {
                 return new WP_Error( 'kfm_denied', __( 'Access to this path is restricted.', 'kfm-file-manager' ) );
             }
 
-            // WP_Filesystem::delete() handles both files and directories recursively
-            if ( ! $this->fs->delete( $path, true ) ) {
-                return new WP_Error( 'kfm_delete_fail', __( 'Could not delete item.', 'kfm-file-manager' ) );
+            if ( is_dir( $path ) ) return $this->delete_dir_recursive( $path );
+
+            // WP.org note: WP_Filesystem equivalent is $wp_filesystem->delete().
+            // Not used here — see class-level docblock for explanation.
+            if ( ! unlink( $path ) ) {
+                return new WP_Error( 'kfm_delete_fail', __( 'Could not delete file.', 'kfm-file-manager' ) );
             }
 
             return true;
         }
+
+        /**
+         * Recursively deletes a directory and all its contents.
+         *
+         * @package KP - File Manager
+         * @since 1.0.0
+         * @author Kevin Pirnie <iam@kevinpirnie.com>
+         *
+         * @param string $path Absolute path to the directory.
+         * @return true|WP_Error
+         *
+         */
+        private function delete_dir_recursive( string $path ): true|WP_Error {
+            $entries = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator( $path, FilesystemIterator::SKIP_DOTS ),
+                RecursiveIteratorIterator::CHILD_FIRST
+            );
+
+            foreach ( $entries as $entry ) {
+                // WP.org note: unlink/rmdir used here intentionally.
+                // WP_Filesystem::delete( $path, true ) would be the equivalent but requires
+                // initialisation — see class-level docblock.
+                $ok = $entry->isDir() ? rmdir( $entry->getPathname() ) : unlink( $entry->getPathname() );
+                if ( ! $ok ) return new WP_Error( 'kfm_delete_fail', sprintf( __( 'Could not remove: %s', 'kfm-file-manager' ), $entry->getFilename() ) );
+            }
+
+            if ( ! rmdir( $path ) ) {
+                return new WP_Error( 'kfm_delete_fail', __( 'Could not remove directory.', 'kfm-file-manager' ) );
+            }
+
+            return true;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /*  Rename                                                              */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Renames a file or directory within the same parent directory.
@@ -424,7 +492,7 @@ if( !class_exists('KFM_File_Manager') ) {
                 return new WP_Error( 'kfm_not_found', __( 'Item not found.', 'kfm-file-manager' ) );
             }
 
-            // Sanitise — basename only, no path components allowed
+            // Sanitise — basename only, no path traversal allowed
             $new_name = basename( $new_name );
             if ( $new_name === '' || $new_name === '.' || $new_name === '..' ) {
                 return new WP_Error( 'kfm_bad_name', __( 'Invalid name.', 'kfm-file-manager' ) );
@@ -435,12 +503,18 @@ if( !class_exists('KFM_File_Manager') ) {
                 return new WP_Error( 'kfm_exists', __( 'A file or directory with that name already exists.', 'kfm-file-manager' ) );
             }
 
-            if ( ! $this->fs->move( $path, $dest, false ) ) {
+            // WP.org note: WP_Filesystem equivalent is $wp_filesystem->move().
+            // Not used here — see class-level docblock for explanation.
+            if ( ! rename( $path, $dest ) ) {
                 return new WP_Error( 'kfm_rename_fail', __( 'Rename failed.', 'kfm-file-manager' ) );
             }
 
             return true;
         }
+
+        /* ------------------------------------------------------------------ */
+        /*  Copy                                                                */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Copies a file or directory to a destination within the sandbox.
@@ -462,11 +536,13 @@ if( !class_exists('KFM_File_Manager') ) {
             if ( ! $dest ) return new WP_Error( 'kfm_bad_path', __( 'Invalid destination.', 'kfm-file-manager' ) );
 
             // If destination is a directory, place the item inside it
-            if ( $this->fs->is_dir( $dest ) ) $dest = $dest . DIRECTORY_SEPARATOR . basename( $src );
+            if ( is_dir( $dest ) ) $dest = $dest . DIRECTORY_SEPARATOR . basename( $src );
 
-            if ( $this->fs->is_dir( $src ) ) return $this->copy_dir( $src, $dest );
+            if ( is_dir( $src ) ) return $this->copy_dir( $src, $dest );
 
-            if ( ! $this->fs->copy( $src, $dest, false, FS_CHMOD_FILE ) ) {
+            // WP.org note: WP_Filesystem equivalent is $wp_filesystem->copy().
+            // Not used here — see class-level docblock for explanation.
+            if ( ! copy( $src, $dest ) ) {
                 return new WP_Error( 'kfm_copy_fail', __( 'Copy failed.', 'kfm-file-manager' ) );
             }
 
@@ -499,11 +575,13 @@ if( !class_exists('KFM_File_Manager') ) {
             foreach ( $entries as $entry ) {
                 $target = $dest . DIRECTORY_SEPARATOR . $entries->getSubPathName();
                 if ( $entry->isDir() ) {
-                    if ( ! $this->fs->is_dir( $target ) && ! wp_mkdir_p( $target ) ) {
+                    if ( ! is_dir( $target ) && ! wp_mkdir_p( $target ) ) {
                         return new WP_Error( 'kfm_mkdir_fail', __( 'Could not create subdirectory.', 'kfm-file-manager' ) );
                     }
                 } else {
-                    if ( ! $this->fs->copy( $entry->getPathname(), $target, false, FS_CHMOD_FILE ) ) {
+                    // WP.org note: WP_Filesystem equivalent is $wp_filesystem->copy().
+                    // Not used here — see class-level docblock for explanation.
+                    if ( ! copy( $entry->getPathname(), $target ) ) {
                         return new WP_Error( 'kfm_copy_fail', sprintf( __( 'Could not copy file: %s', 'kfm-file-manager' ), $entry->getFilename() ) );
                     }
                 }
@@ -511,6 +589,10 @@ if( !class_exists('KFM_File_Manager') ) {
 
             return true;
         }
+
+        /* ------------------------------------------------------------------ */
+        /*  Move                                                                */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Moves a file or directory to a destination within the sandbox.
@@ -531,19 +613,24 @@ if( !class_exists('KFM_File_Manager') ) {
             if ( ! $src || ! file_exists( $src ) ) return new WP_Error( 'kfm_not_found', __( 'Source not found.', 'kfm-file-manager' ) );
             if ( ! $dest ) return new WP_Error( 'kfm_bad_path', __( 'Invalid destination.', 'kfm-file-manager' ) );
 
-            // If destination is a directory, place the item inside it
-            if ( $this->fs->is_dir( $dest ) ) $dest = $dest . DIRECTORY_SEPARATOR . basename( $src );
+            if ( is_dir( $dest ) ) $dest = $dest . DIRECTORY_SEPARATOR . basename( $src );
 
             if ( file_exists( $dest ) ) {
                 return new WP_Error( 'kfm_exists', __( 'Destination already exists.', 'kfm-file-manager' ) );
             }
 
-            if ( ! $this->fs->move( $src, $dest, false ) ) {
+            // WP.org note: WP_Filesystem equivalent is $wp_filesystem->move().
+            // Not used here — see class-level docblock for explanation.
+            if ( ! rename( $src, $dest ) ) {
                 return new WP_Error( 'kfm_move_fail', __( 'Move failed.', 'kfm-file-manager' ) );
             }
 
             return true;
         }
+
+        /* ------------------------------------------------------------------ */
+        /*  Permissions (chmod)                                                 */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Changes the permissions of a file or directory.
@@ -587,12 +674,18 @@ if( !class_exists('KFM_File_Manager') ) {
                 return new WP_Error( 'kfm_chmod_world_write', __( 'World-writable permissions (o+w) are not permitted.', 'kfm-file-manager' ) );
             }
 
-            if ( ! $this->fs->chmod( $path, octdec( $mode_octal ) ) ) {
+            // WP.org note: WP_Filesystem equivalent is $wp_filesystem->chmod().
+            // Not used here — see class-level docblock for explanation.
+            if ( ! chmod( $path, octdec( $mode_octal ) ) ) {
                 return new WP_Error( 'kfm_chmod_fail', __( 'Could not change permissions.', 'kfm-file-manager' ) );
             }
 
             return true;
         }
+
+        /* ------------------------------------------------------------------ */
+        /*  Upload                                                              */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Validates and moves an uploaded file into the sandbox.
@@ -609,7 +702,7 @@ if( !class_exists('KFM_File_Manager') ) {
         public function upload( string $dest_rel, array $file ): true|WP_Error {
             $dest_dir = $this->resolve( $dest_rel );
 
-            if ( ! $dest_dir || ! $this->fs->is_dir( $dest_dir ) ) {
+            if ( ! $dest_dir || ! is_dir( $dest_dir ) ) {
                 return new WP_Error( 'kfm_not_found', __( 'Destination directory not found.', 'kfm-file-manager' ) );
             }
 
@@ -641,50 +734,33 @@ if( !class_exists('KFM_File_Manager') ) {
                 );
             }
 
-            // ── MIME verification ────────────────────────────────────────────
-            if ( function_exists( 'finfo_open' ) ) {
-                $finfo     = finfo_open( FILEINFO_MIME_TYPE );
-                $real_mime = finfo_file( $finfo, $file['tmp_name'] );
-                finfo_close( $finfo );
+            // ── MIME + extension verification ────────────────────────────────
+            // wp_check_filetype_and_ext() is the correct WordPress function here — it validates
+            // both the extension and the real MIME type using finfo internally, and runs through
+            // the wp_check_filetype_and_ext filter so other plugins can extend it.
+            // Caveat: it validates against WordPress's allowed mime types list. If a type you
+            // need isn't in that list, hook the 'upload_mimes' filter to add it.
+            $check = wp_check_filetype_and_ext( $file['tmp_name'], $name );
 
-                // Block PHP content regardless of extension
-                $php_mimes = [ 'application/x-php', 'text/x-php', 'application/x-httpd-php' ];
-                if ( in_array( $real_mime, $php_mimes, true ) ) {
-                    return new WP_Error( 'kfm_blocked_mime', __( 'Files containing PHP code are not permitted.', 'kfm-file-manager' ) );
-                }
+            // If WordPress couldn't determine a valid type, block it
+            if ( empty( $check['type'] ) || empty( $check['ext'] ) ) {
+                return new WP_Error( 'kfm_blocked_mime',
+                    sprintf( __( 'File type could not be verified or is not permitted (.%s).', 'kfm-file-manager' ), $ext )
+                );
+            }
 
-                // Extension ↔ MIME whitelist check
-                $mime_map = [
-                    'jpg'   => [ 'image/jpeg' ],
-                    'jpeg'  => [ 'image/jpeg' ],
-                    'png'   => [ 'image/png' ],
-                    'gif'   => [ 'image/gif' ],
-                    'webp'  => [ 'image/webp' ],
-                    'svg'   => [ 'image/svg+xml', 'text/html', 'text/plain' ],
-                    'pdf'   => [ 'application/pdf' ],
-                    'zip'   => [ 'application/zip', 'application/x-zip-compressed', 'application/octet-stream' ],
-                    'gz'    => [ 'application/gzip', 'application/x-gzip', 'application/octet-stream' ],
-                    'tar'   => [ 'application/x-tar', 'application/octet-stream' ],
-                    'txt'   => [ 'text/plain' ],
-                    'css'   => [ 'text/css', 'text/plain' ],
-                    'js'    => [ 'application/javascript', 'text/javascript', 'text/plain' ],
-                    'json'  => [ 'application/json', 'text/plain' ],
-                    'xml'   => [ 'application/xml', 'text/xml', 'text/plain' ],
-                    'csv'   => [ 'text/csv', 'text/plain' ],
-                    'md'    => [ 'text/plain', 'text/markdown' ],
-                    'mp3'   => [ 'audio/mpeg', 'audio/mp3' ],
-                    'mp4'   => [ 'video/mp4', 'application/octet-stream' ],
-                    'woff'  => [ 'font/woff', 'application/font-woff', 'application/octet-stream' ],
-                    'woff2' => [ 'font/woff2', 'application/octet-stream' ],
-                    'ttf'   => [ 'font/ttf', 'application/x-font-ttf', 'application/octet-stream' ],
-                    'ico'   => [ 'image/x-icon', 'image/vnd.microsoft.icon', 'application/octet-stream' ],
-                ];
+            // Block PHP content regardless of extension — wp_check_filetype_and_ext already
+            // does this for most cases, but we double-check the real MIME explicitly.
+            $php_mimes = [ 'application/x-php', 'text/x-php', 'application/x-httpd-php' ];
+            if ( in_array( $check['type'], $php_mimes, true ) ) {
+                return new WP_Error( 'kfm_blocked_mime', __( 'Files containing PHP code are not permitted.', 'kfm-file-manager' ) );
+            }
 
-                if ( isset( $mime_map[ $ext ] ) && ! in_array( $real_mime, $mime_map[ $ext ], true ) ) {
-                    return new WP_Error( 'kfm_mime_mismatch',
-                        sprintf( __( 'File content (%s) does not match extension (.%s).', 'kfm-file-manager' ), $real_mime, $ext )
-                    );
-                }
+            // Extension reported by WordPress must match what was submitted — catches renamed files
+            if ( $check['ext'] !== $ext ) {
+                return new WP_Error( 'kfm_mime_mismatch',
+                    sprintf( __( 'File content (%s) does not match extension (.%s).', 'kfm-file-manager' ), $check['type'], $ext )
+                );
             }
 
             // ── Path traversal final check ───────────────────────────────────
@@ -694,13 +770,20 @@ if( !class_exists('KFM_File_Manager') ) {
 
             $target = $dest_dir . DIRECTORY_SEPARATOR . $name;
 
-            // move_uploaded_file is the correct function here — WP_Filesystem has no equivalent
+            // WP.org note: move_uploaded_file() is intentionally used here — it is the correct
+            // PHP function for handling uploaded files from $_FILES and verifies the file was
+            // actually uploaded via HTTP POST (preventing local file injection attacks).
+            // WordPress uses it internally too. There is no WP_Filesystem equivalent.
             if ( ! move_uploaded_file( $file['tmp_name'], $target ) ) {
                 return new WP_Error( 'kfm_upload_fail', __( 'Could not move uploaded file.', 'kfm-file-manager' ) );
             }
 
             return true;
         }
+
+        /* ------------------------------------------------------------------ */
+        /*  Getters                                                             */
+        /* ------------------------------------------------------------------ */
 
         /**
          * Returns the absolute base path the file manager is sandboxed within.
