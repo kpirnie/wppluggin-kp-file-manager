@@ -75,6 +75,22 @@
                 </td>
             </tr>
 
+            <!-- Alert Email Addresses -->
+            <tr>
+                <th scope="row"><label for="kfm_alert_emails"><?php esc_html_e( 'Alert Email Address(es)', 'kfm-file-manager' ); ?></label></th>
+                <td>
+                    <input type="text"
+                        name="<?php echo esc_attr( KFM_Settings::OPTION_ALERT_EMAILS ); ?>"
+                        id="kfm_alert_emails" class="large-text"
+                        value="<?php echo esc_attr( get_option( KFM_Settings::OPTION_ALERT_EMAILS, '' ) ); ?>"
+                        placeholder="<?php echo esc_attr( get_option( 'admin_email' ) ); ?>">
+                    <p class="description"><?php printf(
+                        esc_html__( 'Semicolon-delimited list of addresses to notify. Leave blank to use the site admin address (%s).', 'kfm-file-manager' ),
+                        '<code>' . esc_html( get_option( 'admin_email' ) ) . '</code>'
+                    ); ?></p>
+                </td>
+            </tr>
+
         </table>
 
         <?php submit_button( __( 'Save Security Settings', 'kfm-file-manager' ) ); ?>

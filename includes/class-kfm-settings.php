@@ -7,7 +7,6 @@ defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
  */
 class KFM_Settings {
 
-    const OPTION_ROLE          = 'kfm_allowed_role';
     const OPTION_PATH          = 'kfm_base_path';
     const OPTION_BLOCKED_EXTS  = 'kfm_blocked_exts';
     const OPTION_READONLY_EXTS = 'kfm_readonly_exts';
@@ -15,6 +14,8 @@ class KFM_Settings {
     const OPTION_SHOW_DOTFILES = 'kfm_show_dotfiles';
     const OPTION_CHMOD_FLOOR   = 'kfm_chmod_floor';
     const OPTION_AUDIT_ALERTS  = 'kfm_audit_email_alerts';
+    const OPTION_LOG_ENTRIES   = 'kfm_log_max_entries';
+    const OPTION_ALERT_EMAILS  = 'kfm_alert_emails';
 
     public function register(): void {
         add_action( 'admin_init', [ $this, 'register_settings' ] );
@@ -24,9 +25,10 @@ class KFM_Settings {
     public function register_settings(): void {
         // General settings group (Settings page)
         $general = [
-            self::OPTION_ROLE          => [ 'string', [ $this, 'sanitize_role' ],        'administrator' ],
             self::OPTION_PATH          => [ 'string', [ $this, 'sanitize_path' ],        '' ],
             self::OPTION_SHOW_DOTFILES => [ 'string', 'sanitize_text_field',             '0' ],
+            self::OPTION_LOG_ENTRIES  => [ 'integer', [ $this, 'sanitize_log_entries' ],  100 ],
+
         ];
         foreach ( $general as $key => $args ) {
             register_setting( 'kfm_options_group', $key, [
@@ -43,6 +45,7 @@ class KFM_Settings {
             self::OPTION_PATH_DENYLIST => [ 'string', [ $this, 'sanitize_denylist' ],    '' ],
             self::OPTION_CHMOD_FLOOR   => [ 'string', [ $this, 'sanitize_chmod_floor' ], '0' ],
             self::OPTION_AUDIT_ALERTS  => [ 'string', 'sanitize_text_field',             '0' ],
+            self::OPTION_ALERT_EMAILS => [ 'string',  [ $this, 'sanitize_alert_emails' ], ''  ],
         ];
         foreach ( $security as $key => $args ) {
             register_setting( 'kfm_security_group', $key, [
@@ -64,11 +67,6 @@ class KFM_Settings {
     /* ------------------------------------------------------------------ */
     /*  Sanitizers                                                          */
     /* ------------------------------------------------------------------ */
-
-    public function sanitize_role( string $value ): string {
-        $allowed = array_keys( self::get_role_options() );
-        return in_array( $value, $allowed, true ) ? $value : 'administrator';
-    }
 
     public function sanitize_path( string $value ): string {
         $value = trim( $value, "/\\ \t\n\r" );
@@ -111,13 +109,40 @@ class KFM_Settings {
         return preg_match( '/^[0-7]{3,4}$/', $value ) ? $value : '0';
     }
 
+    /**
+     * Sanitizes the log entry count setting.
+     *
+     * @package KP - File Manager
+     * @since 1.0.0
+     * @author Kevin Pirnie <iam@kevinpirnie.com>
+     *
+     * @param mixed $value
+     * @return int
+     *
+     */
+    public function sanitize_log_entries( $value ): int {
+        return max( 10, min( 10000, (int) $value ) );
+    }
+
+    /**
+     * Sanitizes the alert email list (semicolon-delimited).
+     *
+     * @package KP - File Manager
+     * @since 1.0.0
+     * @author Kevin Pirnie <iam@kevinpirnie.com>
+     *
+     * @param string $value
+     * @return string
+     *
+     */
+    public function sanitize_alert_emails( string $value ): string {
+        $emails = array_filter( array_map( 'trim', explode( ';', $value ) ), 'is_email' );
+        return implode( ';', $emails );
+    }
+
     /* ------------------------------------------------------------------ */
     /*  Getters                                                             */
     /* ------------------------------------------------------------------ */
-
-    public static function get_allowed_role(): string {
-        return get_option( self::OPTION_ROLE, 'administrator' );
-    }
 
     public static function get_base_path(): string {
         $rel        = get_option( self::OPTION_PATH, '' );
@@ -162,6 +187,38 @@ class KFM_Settings {
         return get_option( self::OPTION_CHMOD_FLOOR, '0' );
     }
 
+    /**
+     * Returns the maximum number of audit log entries to keep.
+     *
+     * @package KP - File Manager
+     * @since 1.0.0
+     * @author Kevin Pirnie <iam@kevinpirnie.com>
+     *
+     * @return int
+     *
+     */
+    public static function get_log_max_entries(): int {
+        return max( 10, min( 10000, (int) get_option( self::OPTION_LOG_ENTRIES, 100 ) ) );
+    }
+
+    /**
+     * Returns the list of email addresses to notify on alert actions.
+     * Falls back to the site admin email if none are configured.
+     *
+     * @package KP - File Manager
+     * @since 1.0.0
+     * @author Kevin Pirnie <iam@kevinpirnie.com>
+     *
+     * @return array
+     *
+     */
+    public static function get_alert_emails(): array {
+        $raw    = trim( (string) get_option( self::OPTION_ALERT_EMAILS, '' ) );
+        if ( $raw === '' ) return [ get_option( 'admin_email' ) ];
+        $emails = array_values( array_filter( array_map( 'trim', explode( ';', $raw ) ), 'is_email' ) );
+        return empty( $emails ) ? [ get_option( 'admin_email' ) ] : $emails;
+    }
+
     /* ------------------------------------------------------------------ */
     /*  Anonymous operation check                                           */
     /* ------------------------------------------------------------------ */
@@ -191,22 +248,14 @@ class KFM_Settings {
     /*  Role / access helpers                                               */
     /* ------------------------------------------------------------------ */
 
-    public static function get_role_options(): array {
-        $roles = [ 'anonymous' => __( 'Anonymous (everyone)', 'kfm-file-manager' ) ];
-        global $wp_roles;
-        foreach ( $wp_roles->roles as $slug => $role ) {
-            $roles[ $slug ] = translate_user_role( $role['name'] );
-        }
-        return $roles;
-    }
-
     public static function current_user_allowed(): bool {
-        $allowed_role = self::get_allowed_role();
-        if ( $allowed_role === 'anonymous' ) return true;
-        if ( ! is_user_logged_in() ) return false;
-        if ( current_user_can( 'manage_options' ) ) return true;
-        $user = wp_get_current_user();
-        return in_array( $allowed_role, (array) $user->roles, true );
+        if ( ! is_user_logged_in() ) {
+            // Anonymous: allow only if the anonymous role has at least one op enabled
+            $anon_ops = KFM_Permissions::get_role_ops( 'anonymous' );
+            return in_array( true, $anon_ops, true );
+        }
+        // All logged-in users pass the gate; op-level checks are handled by KFM_Permissions
+        return true;
     }
 
     /* ------------------------------------------------------------------ */

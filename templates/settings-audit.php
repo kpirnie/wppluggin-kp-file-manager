@@ -2,7 +2,7 @@
 
 // Pagination
 $per_page    = 50;
-$all_entries = KFM_Audit_Log::get( 500 );
+$all_entries = KFM_Audit_Log::get( );
 $total       = count( $all_entries );
 
 // Filters
@@ -24,7 +24,7 @@ $page_entries   = array_slice( $all_entries, $offset, $per_page );
 $total_pages    = max( 1, (int) ceil( $filtered_total / $per_page ) );
 
 // Unique actions for filter dropdown
-$all_raw     = KFM_Audit_Log::get( 500 );
+$all_raw     = KFM_Audit_Log::get( );
 $all_actions = array_unique( array_column( $all_raw, 'action' ) );
 sort( $all_actions );
 
@@ -46,50 +46,52 @@ function kfm_audit_url( array $extra = [] ): string {
     <?php settings_errors( 'kfm_audit' ); ?>
 
     <!-- ─── Filter bar ────────────────────────────────────── -->
-    <form method="get" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px">
-        <input type="hidden" name="page" value="kfm-audit">
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px">
 
-        <input type="text" name="kfm_user" class="regular-text"
-               placeholder="<?php esc_attr_e( 'Filter by user…', 'kfm-file-manager' ); ?>"
-               value="<?php echo esc_attr( $filter_user ); ?>"
-               style="max-width:180px">
+        <form method="get" style="display:contents">
+            <input type="hidden" name="page" value="kfm-audit">
 
-        <select name="kfm_action">
-            <option value=""><?php esc_html_e( 'All actions', 'kfm-file-manager' ); ?></option>
-            <?php foreach ( $all_actions as $a ) : ?>
-            <option value="<?php echo esc_attr( $a ); ?>" <?php selected( $filter_action, $a ); ?>>
-                <?php echo esc_html( str_replace( 'kfm_', '', $a ) ); ?>
-            </option>
-            <?php endforeach; ?>
-        </select>
+            <input type="text" name="kfm_user" class="regular-text"
+                   placeholder="<?php esc_attr_e( 'Filter by user…', 'kfm-file-manager' ); ?>"
+                   value="<?php echo esc_attr( $filter_user ); ?>"
+                   style="max-width:180px">
 
-        <select name="kfm_result">
-            <option value=""><?php esc_html_e( 'All results', 'kfm-file-manager' ); ?></option>
-            <option value="ok"    <?php selected( $filter_result, 'ok' ); ?>><?php esc_html_e( 'OK only', 'kfm-file-manager' ); ?></option>
-            <option value="error" <?php selected( $filter_result, 'error' ); ?>><?php esc_html_e( 'Errors / blocked', 'kfm-file-manager' ); ?></option>
-        </select>
+            <select name="kfm_action">
+                <option value=""><?php esc_html_e( 'All actions', 'kfm-file-manager' ); ?></option>
+                <?php foreach ( $all_actions as $a ) : ?>
+                <option value="<?php echo esc_attr( $a ); ?>" <?php selected( $filter_action, $a ); ?>>
+                    <?php echo esc_html( str_replace( 'kfm_', '', $a ) ); ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
 
-        <?php submit_button( __( 'Filter', 'kfm-file-manager' ), 'secondary', '', false, [ 'style' => 'height:30px;padding:0 10px' ] ); ?>
+            <select name="kfm_result">
+                <option value=""><?php esc_html_e( 'All results', 'kfm-file-manager' ); ?></option>
+                <option value="ok"    <?php selected( $filter_result, 'ok' ); ?>><?php esc_html_e( 'OK only', 'kfm-file-manager' ); ?></option>
+                <option value="error" <?php selected( $filter_result, 'error' ); ?>><?php esc_html_e( 'Errors / blocked', 'kfm-file-manager' ); ?></option>
+            </select>
 
-        <?php if ( $filter_user || $filter_action || $filter_result ) : ?>
-        <a href="<?php echo esc_url( kfm_audit_url() ); ?>" class="button button-secondary" style="height:30px;line-height:30px;padding:0 10px">
-            <?php esc_html_e( 'Clear', 'kfm-file-manager' ); ?>
-        </a>
+            <?php submit_button( __( 'Filter', 'kfm-file-manager' ), 'secondary', '', false, [ 'style' => 'height:30px;padding:0 10px' ] ); ?>
+
+            <?php if ( $filter_user || $filter_action || $filter_result ) : ?>
+            <a href="<?php echo esc_url( kfm_audit_url() ); ?>" class="button button-secondary" style="height:30px;line-height:30px;padding:0 10px">
+                <?php esc_html_e( 'Clear', 'kfm-file-manager' ); ?>
+            </a>
+            <?php endif; ?>
+        </form>
+
+        <?php if ( $total > 0 ) : ?>
+        <form method="post" style="margin-left:auto">
+            <?php wp_nonce_field( 'kfm_clear_log' ); ?>
+            <button type="submit" name="kfm_clear_log" value="1" class="button button-secondary"
+                    style="color:#a00;border-color:#a00"
+                    onclick="return confirm( '<?php echo esc_js( __( 'Permanently clear all log entries?', 'kfm-file-manager' ) ); ?>' )">
+                <?php esc_html_e( 'Clear Entire Log', 'kfm-file-manager' ); ?>
+            </button>
+        </form>
         <?php endif; ?>
 
-        <span style="margin-left:auto">
-            <?php if ( $total > 0 ) : ?>
-            <form method="post" style="display:inline">
-                <?php wp_nonce_field( 'kfm_clear_log' ); ?>
-                <button type="submit" name="kfm_clear_log" value="1" class="button button-secondary"
-                        style="color:#a00;border-color:#a00"
-                        onclick="return confirm( '<?php echo esc_js( __( 'Permanently clear all 500 log entries?', 'kfm-file-manager' ) ); ?>' )">
-                    <?php esc_html_e( 'Clear Entire Log', 'kfm-file-manager' ); ?>
-                </button>
-            </form>
-            <?php endif; ?>
-        </span>
-    </form>
+    </div>
 
     <?php if ( empty( $page_entries ) ) : ?>
     <p><?php esc_html_e( 'No log entries found.', 'kfm-file-manager' ); ?></p>

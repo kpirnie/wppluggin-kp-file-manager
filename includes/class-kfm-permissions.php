@@ -83,8 +83,6 @@ class KFM_Permissions {
         if ( current_user_can( 'manage_options' ) ) return true;
 
         if ( ! is_user_logged_in() ) {
-            // Anonymous: check anonymous row only if that role is the gate
-            if ( KFM_Settings::get_allowed_role() !== 'anonymous' ) return false;
             return self::role_can( 'anonymous', $op );
         }
 

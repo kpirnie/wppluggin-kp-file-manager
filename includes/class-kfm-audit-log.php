@@ -33,7 +33,6 @@ if( !class_exists('KFM_Audit_Log') ) {
 
         // Option key for storing the audit log in wp_options and max entries to keep.
         const OPTION_KEY  = 'kfm_audit_log';
-        const MAX_ENTRIES = 100;
 
         // Actions that should always be logged
         const LOGGED_ACTIONS = [
@@ -80,8 +79,9 @@ if( !class_exists('KFM_Audit_Log') ) {
             $log[] = $entry;
 
             // Trim to ring buffer size
-            if ( count( $log ) > self::MAX_ENTRIES ) {
-                $log = array_slice( $log, -self::MAX_ENTRIES );
+            $max = KFM_Settings::get_log_max_entries();
+            if ( count( $log ) > $max ) {
+                $log = array_slice( $log, -$max );
             }
 
             // save the updated log back to the database
@@ -100,10 +100,11 @@ if( !class_exists('KFM_Audit_Log') ) {
             }
         }
 
-        public static function get( int $limit = 100 ): array {
+        public static function get( int $limit = 0 ): array {
+            $max = $limit > 0 ? $limit : KFM_Settings::get_log_max_entries();
             $log = get_option( self::OPTION_KEY, [] );
             if ( ! is_array( $log ) ) return [];
-            return array_reverse( array_slice( $log, -$limit ) );
+            return array_reverse( array_slice( $log, -$max ) );
         }
 
         public static function clear(): void {
@@ -111,7 +112,7 @@ if( !class_exists('KFM_Audit_Log') ) {
         }
 
         private static function send_alert( array $entry ): void {
-            $admin  = get_option( 'admin_email' );
+            $email_to = KFM_Settings::get_alert_emails();
             $site   = get_bloginfo( 'name' );
             $labels = [
                 'kfm_delete' => 'DELETE',
@@ -120,7 +121,7 @@ if( !class_exists('KFM_Audit_Log') ) {
             $label  = $labels[ $entry['action'] ] ?? strtoupper( $entry['action'] );
 
             wp_mail(
-                $admin,
+                $email_to,
                 "[{$site}] KFM Security Alert: {$label}",
                 sprintf(
                     "Action:  %s\nPath:    %s\nUser:    %s\nIP:      %s\nTime:    %s\n",
