@@ -113,7 +113,23 @@
                 r.data && r.data.message ? r.data.message : ( KFM.i18n.errorGeneric || 'An error occurred.' )
             );
             return r.data;
+        }, function ( xhr, status, err ) {
+            // Network or server error — extract a readable message
+            var msg = ( KFM.i18n.errorGeneric || 'An error occurred.' );
+            try {
+                var json = JSON.parse( xhr.responseText );
+                if ( json.data && json.data.message ) msg = json.data.message;
+            } catch(e) {
+                if ( err && typeof err === 'string' ) msg = err;
+            }
+            return $.Deferred().reject( msg );
         } );
+    }
+
+    function errMsg( err ) {
+        if ( typeof err === 'string' ) return err;
+        if ( err && err.message ) return err.message;
+        return KFM.i18n.errorGeneric || 'An error occurred.';
     }
 
     function esc( str ) {
@@ -263,7 +279,7 @@
             setStatus( '' );
             if ( rel === '' && $( '#kfm-tree' ).is( ':empty' ) ) renderTree( '', $( '#kfm-tree' ) );
         } ).catch( function ( err ) {
-            var msg = ( err && err.message ) ? err.message : ( typeof err === 'string' ? err : ( KFM.i18n.errorGeneric || 'An error occurred.' ) );
+            var msg = errMsg( err );
             setStatus( msg );
             notify( esc( msg ), 'danger', 0 );
         } );
@@ -362,7 +378,7 @@
             notify( '<span uk-icon="icon:check;ratio:0.85"></span>&nbsp; ' + ( ( KFM.i18n && KFM.i18n.saved ) ? KFM.i18n.saved : 'File saved.' ), 'success', 3000 );
         } ).catch( function ( err ) {
             if ( _savingNotif ) { try { _savingNotif.close( true ); } catch(e) {} _savingNotif = null; }
-            notify( '<span uk-icon="icon:warning;ratio:0.85"></span>&nbsp; ' + esc( err ), 'danger', 0 );
+            notify( '<span uk-icon="icon:warning;ratio:0.85"></span>&nbsp; ' + esc( errMsg( err ) ), 'danger', 0 );
         } );
     }
 
@@ -410,7 +426,7 @@
                 setTimeout( function () { state.editorCM.refresh(); }, 50 );
             }, { self: false, filter: '#kfm-editor-modal' } );
 
-        } ).catch( function ( err ) { notify( esc( err ), 'danger', 0 ); } );
+        } ).catch( function ( err ) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
     }
 
     /* ─────────────────────────────────────────── Permissions ── */
@@ -532,7 +548,7 @@
                 ajax( 'kfm_create_file', { dir: state.currentPath, name: name } ).then( function () {
                     notify( 'Created: ' + esc( name ), 'success', 2500 );
                     loadDir( state.currentPath );
-                } ).catch( function (err) { notify( esc( err ), 'danger', 0 ); } );
+                } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
             } ).catch( function () {} );
         } );
         $( '#kfm-btn-new-folder' ).on( 'click', function () {
@@ -540,7 +556,7 @@
                 ajax( 'kfm_create_dir', { dir: state.currentPath, name: name } ).then( function () {
                     notify( 'Created: ' + esc( name ), 'success', 2500 );
                     loadDir( state.currentPath );
-                } ).catch( function (err) { notify( esc( err ), 'danger', 0 ); } );
+                } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
             } ).catch( function () {} );
         } );
 
@@ -596,7 +612,7 @@
                 updateToolbarState();
                 notify( 'Paste complete.', 'success', 2500 );
                 loadDir( state.currentPath );
-            } ).catch( function (err) { notify( esc( err ), 'danger', 0 ); } );
+            } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
         } );
 
         /* Rename (toolbar) */
@@ -608,7 +624,7 @@
                 ajax( 'kfm_rename', { path: rel, new_name: newName } ).then( function () {
                     notify( 'Renamed.', 'success', 2500 );
                     loadDir( state.currentPath );
-                } ).catch( function (err) { notify( esc( err ), 'danger', 0 ); } );
+                } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
             } ).catch( function () {} );
         } );
 
@@ -619,7 +635,7 @@
                 ajax( 'kfm_rename', { path: rel, new_name: newName } ).then( function () {
                     notify( 'Renamed.', 'success', 2500 );
                     loadDir( state.currentPath );
-                } ).catch( function (err) { notify( esc( err ), 'danger', 0 ); } );
+                } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
             } ).catch( function () {} );
         } );
 
@@ -632,7 +648,7 @@
             p.then( function () {
                 notify( 'Deleted.', 'success', 2500 );
                 loadDir( state.currentPath );
-            } ).catch( function (err) { notify( esc( err ), 'danger', 0 ); } );
+            } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
         }
         $( '#kfm-btn-delete' ).on( 'click', function () { doDelete( Array.from( state.selected ) ); } );
         $( '#kfm-tbody' ).on( 'click', '.kfm-btn-del', function () { doDelete( [ $( this ).data( 'rel' ) ] ); } );
@@ -676,7 +692,7 @@
                 UIkit.modal( '#kfm-chmod-modal' ).hide();
                 notify( 'Permissions updated.', 'success', 2500 );
                 loadDir( state.currentPath );
-            } ).catch( function (err) { notify( esc( err ), 'danger', 0 ); } );
+            } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
         } );
     }
 

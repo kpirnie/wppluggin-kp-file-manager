@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       KP – File Manager
+ * Plugin Name:       KP File Manager
  * Plugin URI:        https://kevinpirnie.com
  * Description:       A secure, role-aware file manager for WordPress. Browse, edit, upload, and manage files directly from the admin — no FTP required. Sandboxed to wp-content with per-role permissions, audit logging, and a built-in syntax-highlighting code editor.
  * Version:           1.0.57

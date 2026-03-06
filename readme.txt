@@ -9,7 +9,7 @@ Stable tag: 1.0.57
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
-A secure, role-aware file manager for WordPress with a built-in syntax-highlighted code editor. All operations are sandboxed inside wp-content.
+A secure, role-aware file manager for WordPress. Browse, edit, upload, and manage files directly from the admin — no FTP required. Sandboxed to wp-content with per-role permissions, audit logging, and a built-in syntax-highlighting code editor.
 
 == Description ==
 

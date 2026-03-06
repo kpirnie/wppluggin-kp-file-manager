@@ -100,18 +100,60 @@ if( !class_exists('KFM_Audit_Log') ) {
             }
         }
 
+        /** 
+         * Get the audit log entries
+         * 
+         * @package KP - File Manager
+         * @since 1.0.0
+         * @author Kevin Pirnie <iam@kevinpirnie.com>
+         *
+         * @param int $limit number of items to display
+         * 
+         * @return array
+         */
         public static function get( int $limit = 0 ): array {
+
+            // set the maximum number of items to display
             $max = $limit > 0 ? $limit : KFM_Settings::get_log_max_entries();
+
+            // get the log
             $log = get_option( self::OPTION_KEY, [] );
+
+            // make sure it's an array and return either the items or an empty array
             if ( ! is_array( $log ) ) return [];
             return array_reverse( array_slice( $log, -$max ) );
         }
 
+        /** 
+         * Clear out the audit log entries
+         * 
+         * @package KP - File Manager
+         * @since 1.0.0
+         * @author Kevin Pirnie <iam@kevinpirnie.com>
+         * 
+         * @return void
+         */
         public static function clear(): void {
+
+            // update the option storing the log
             update_option( self::OPTION_KEY, [], false );
         }
 
+        /** 
+         * Send an alert to the configured email addresses
+         * if we are configured to do so
+         * 
+         * @package KP - File Manager
+         * @since 1.0.0
+         * @author Kevin Pirnie <iam@kevinpirnie.com>
+         * 
+         * @param array The entry to send
+         * 
+         * @return void
+         */
         private static function send_alert( array $entry ): void {
+
+            // setup the data necessary to process
             $email_to = KFM_Settings::get_alert_emails();
             $site   = get_bloginfo( 'name' );
             $labels = [
@@ -120,6 +162,7 @@ if( !class_exists('KFM_Audit_Log') ) {
             ];
             $label  = $labels[ $entry['action'] ] ?? strtoupper( $entry['action'] );
 
+            // send out the email notice
             wp_mail(
                 $email_to,
                 "[{$site}] KFM Security Alert: {$label}",
@@ -134,6 +177,15 @@ if( !class_exists('KFM_Audit_Log') ) {
             );
         }
 
+        /** 
+         * Try to get the client's IP address for the logs
+         * 
+         * @package KP - File Manager
+         * @since 1.0.0
+         * @author Kevin Pirnie <iam@kevinpirnie.com>
+         * 
+         * @return string
+         */
         private static function client_ip(): string {
             foreach ( [ 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR' ] as $k ) {
                 if ( ! empty( $_SERVER[ $k ] ) ) {
