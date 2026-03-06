@@ -282,12 +282,20 @@
                   '</a>'
                 : '';
 
-            // Edit — requires read; hidden for dirs and read-only files
-            var editBtn = ( ! isDir && ! isRO && canDo( 'read' ) )
-                ? '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="Edit">' +
-                    '<span uk-icon="icon:pencil;ratio:0.75"></span>' +
-                  '</button>'
-                : '';
+            // Edit / Preview — requires read; hidden for dirs
+            // Images get a preview (eye) button; text files get the pencil editor button
+            var editBtn = '';
+            if ( ! isDir && canDo( 'read' ) ) {
+                if ( isImage( item.rel ) ) {
+                    editBtn = '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="Preview">' +
+                                '<span uk-icon="icon:image;ratio:0.75"></span>' +
+                              '</button>';
+                } else if ( ! isRO ) {
+                    editBtn = '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="Edit">' +
+                                '<span uk-icon="icon:pencil;ratio:0.75"></span>' +
+                              '</button>';
+                }
+            }
 
             // Rename — requires rename
             var renameBtn = canDo( 'rename' )
@@ -440,6 +448,26 @@
                 if ( ! settled ) reject( 'cancelled' );
             }, { self: false, filter: '#kfm-modal-generic' } );
         } );
+    }
+
+    /* ─────────────────────────────────────── Image preview ── */
+
+    var IMAGE_EXTS = [ 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico' ];
+
+    function isImage( rel ) {
+        var ext = ( rel.split( '.' ).pop() || '' ).toLowerCase();
+        return IMAGE_EXTS.indexOf( ext ) !== -1;
+    }
+
+    function openImagePreview( rel, name ) {
+        var url = KFM.ajaxUrl
+            + '?action=kfm_download&nonce=' + encodeURIComponent( KFM.nonce )
+            + '&path=' + encodeURIComponent( rel )
+            + '&inline=1';
+
+        $( '#kfm-image-preview' ).attr( { src: url, alt: name } );
+        $( '#kfm-image-caption' ).text( name );
+        UIkit.modal( '#kfm-image-modal' ).show();
     }
 
     /* ───────────────────────────────────────── Editor / save ── */
@@ -677,16 +705,31 @@
            Note: file links are only rendered when canDo('read') is true (see renderTable),
            so these handlers fire only for permitted users. ── */
         $( '#kfm-tbody' ).on( 'click', '.kfm-btn-edit', function () {
-            openEditor( $( this ).data( 'rel' ) );
+            var rel = $( this ).data( 'rel' );
+            if ( isImage( rel ) ) {
+                openImagePreview( rel, rel.split( '/' ).pop() );
+            } else {
+                openEditor( rel );
+            }
         } );
         $( '#kfm-tbody' ).on( 'click', '.kfm-file-link', function (e) {
             e.preventDefault();
-            openEditor( $( this ).data( 'rel' ) );
+            var rel  = $( this ).data( 'rel' );
+            var name = $( this ).text();
+            if ( isImage( rel ) ) {
+                openImagePreview( rel, name );
+            } else {
+                openEditor( rel );
+            }
         } );
         $( '#kfm-tbody' ).on( 'dblclick', 'tr[data-type="file"]', function () {
             if ( ! canDo( 'read' ) ) return;
             var rel = $( this ).data( 'rel' );
             var ext = ( rel.split( '.' ).pop() || '' ).toLowerCase();
+            if ( isImage( rel ) ) {
+                openImagePreview( rel, rel.split( '/' ).pop() );
+                return;
+            }
             var txt = [ 'php','js','css','html','htm','json','xml','txt','md','sql','sh','ts','csv','log','ini','env','htaccess' ];
             if ( txt.indexOf( ext ) !== -1 || rel.indexOf( '.' ) === -1 ) openEditor( rel );
         } );

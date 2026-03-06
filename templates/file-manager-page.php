@@ -199,3 +199,14 @@
         </div>
     </div>
 </div>
+
+<!-- ═══════════════════════════════════════════ IMAGE PREVIEW MODAL -->
+<div id="kfm-image-modal" uk-modal="bg-close: true; esc-close: true">
+    <div class="uk-modal-dialog uk-margin-auto-vertical" style="background:transparent;box-shadow:none;max-width:90vw;width:auto">
+        <button class="uk-modal-close-outside" type="button" uk-close style="color:#fff"></button>
+        <div style="text-align:center">
+            <img id="kfm-image-preview" src="" alt="" style="max-width:85vw;max-height:82vh;border-radius:4px;display:block;margin:0 auto">
+            <p id="kfm-image-caption" style="color:#ddd;font-size:12px;margin-top:8px;font-family:monospace"></p>
+        </div>
+    </div>
+</div>

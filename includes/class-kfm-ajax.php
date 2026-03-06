@@ -373,7 +373,9 @@ if( !class_exists('KFM_Ajax') ) {
 
         /**
          * Handle the 'download' action.
-         * Streams the file to the browser as a download.
+         * Streams the file to the browser.
+         * When $_GET['inline'] === '1' the file is served inline (for image preview);
+         * otherwise it is forced as an attachment download.
          *
          * @package KP - File Manager
          * @since 1.0.0
@@ -396,10 +398,12 @@ if( !class_exists('KFM_Ajax') ) {
                 ? finfo_file( finfo_open( FILEINFO_MIME_TYPE ), $path )
                 : 'application/octet-stream';
 
-            // Log the download
+            $inline = isset( $_GET['inline'] ) && $_GET['inline'] === '1';
+
+            // Log the action
             KFM_Audit_Log::write( 'kfm_download', $rel, 'ok' );
 
-            // Read via WP_Filesystem then stream to browser
+            // Read via file manager
             $data = $this->fm->read_file( $rel );
             if ( is_wp_error( $data ) ) {
                 wp_send_json_error( [ 'message' => $data->get_error_message() ], 500 );
@@ -407,11 +411,10 @@ if( !class_exists('KFM_Ajax') ) {
 
             nocache_headers();
             header( 'Content-Type: ' . $mime );
-            header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+            header( 'Content-Disposition: ' . ( $inline ? 'inline' : 'attachment' ) . '; filename="' . $filename . '"' );
             header( 'Content-Length: ' . $size );
             header( 'X-Content-Type-Options: nosniff' );
 
-            // Flush any output buffers before sending the file contents
             while ( ob_get_level() ) {
                 ob_end_clean();
             }
