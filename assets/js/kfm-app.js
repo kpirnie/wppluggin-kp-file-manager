@@ -1,5 +1,5 @@
 /**
- * KFM File Manager – Frontend Application v1.0.4
+ * KFM File Manager – Frontend Application v1.0.5
  * Depends on: jQuery, UIKit 3, UIKit Icons, wp-codemirror
  */
 ( function ( $, KFM, UIkit ) {
@@ -18,6 +18,62 @@
         editorRel   : null,
         chmodRel    : null,
     };
+
+    /* ─────────────────────────────── Permission helpers ── */
+
+    var ALLOWED_OPS = ( KFM.allowedOps && KFM.allowedOps.length ) ? KFM.allowedOps : [];
+
+    function canDo( op ) {
+        return ALLOWED_OPS.indexOf( op ) !== -1;
+    }
+
+    /**
+     * Hides toolbar buttons and table columns the current user cannot use.
+     * Called once on boot before the first directory load.
+     */
+    function applyOpVisibility() {
+
+        // Write: new file/folder group + copy/cut/paste group
+        if ( ! canDo( 'write' ) ) {
+            $( '#kfm-btn-new-file' ).closest( '.kfm-btn-group' ).hide();
+            $( '#kfm-btn-copy' ).closest( '.kfm-btn-group' ).hide();
+        }
+
+        // Upload
+        if ( ! canDo( 'upload' ) ) {
+            $( '#kfm-btn-upload' ).hide();
+        }
+
+        // Rename / chmod group (toolbar)
+        if ( ! canDo( 'rename' ) ) $( '#kfm-btn-rename' ).hide();
+        if ( ! canDo( 'chmod'  ) ) $( '#kfm-btn-chmod'  ).hide();
+        if ( ! canDo( 'rename' ) && ! canDo( 'chmod' ) ) {
+            $( '#kfm-btn-rename' ).closest( '.kfm-btn-group' ).hide();
+        }
+
+        // Delete toolbar button
+        if ( ! canDo( 'delete' ) ) $( '#kfm-btn-delete' ).hide();
+
+        // Perms column (th + all tds rendered later) — inject CSS so it covers dynamic rows too
+        if ( ! canDo( 'chmod' ) ) {
+            $( '<style id="kfm-hide-perms">.kfm-col-perms { display:none !important; }</style>' )
+                .appendTo( 'head' );
+        }
+
+        // Check-all column header — hide when no bulk operations are available
+        var hasBulk = canDo( 'write' ) || canDo( 'rename' ) || canDo( 'chmod' ) || canDo( 'delete' );
+        if ( ! hasBulk ) {
+            $( '#kfm-table thead .kfm-col-check' ).hide();
+        }
+
+        // Collapse toolbar dividers that now sit between two hidden sections
+        $( '.kfm-toolbar-divider' ).each( function () {
+            var $d      = $( this );
+            var prevVis = $d.prevAll( '.uk-button-group, .uk-button, .kfm-btn-sep' ).filter( ':visible' ).length;
+            var nextVis = $d.nextAll( '.uk-button-group, .uk-button, .kfm-btn-sep' ).filter( ':visible' ).length;
+            if ( ! prevVis || ! nextVis ) $d.hide();
+        } );
+    }
 
     /* ──────────────────────────────────── Client-side security ── */
 
@@ -95,7 +151,6 @@
         return new Date( ts * 1000 ).toLocaleString();
     }
 
-    // Brief status bar message — auto-clears after 4 seconds
     function setStatus( msg ) {
         var $s = $( '#kfm-status' );
         $s.text( msg );
@@ -103,14 +158,12 @@
         if ( msg ) $s.data( 'timer', setTimeout( function () { $s.text( '' ); }, 4000 ) );
     }
 
-    // Normalise any error value to a plain string
     function errMsg( err ) {
         if ( typeof err === 'string' ) return err;
         if ( err && err.message ) return err.message;
         return KFM.i18n.errorGeneric || 'An error occurred.';
     }
 
-    // Wrapper around $.ajax — always resolves/rejects with plain data or a string message
     function ajax( action, data, method ) {
         return $.ajax( {
             url    : KFM.ajaxUrl,
@@ -122,7 +175,6 @@
             );
             return r.data;
         }, function ( xhr, status, err ) {
-            // Network or server-level failure — extract the most useful message available
             var msg = ( KFM.i18n.errorGeneric || 'An error occurred.' );
             try {
                 var json = JSON.parse( xhr.responseText );
@@ -138,7 +190,6 @@
         return $( '<div>' ).text( String( str || '' ) ).html();
     }
 
-    // UIKit notification — success or danger only, no intermediate states
     function notify( msg, status, timeout ) {
         UIkit.notification( {
             message : msg,
@@ -198,41 +249,81 @@
         state.selected.clear();
         updateToolbarState();
 
+        var hasBulk = canDo( 'write' ) || canDo( 'rename' ) || canDo( 'chmod' ) || canDo( 'delete' );
+
         items.forEach( function ( item ) {
             var ico   = iconFor( item );
             var isDir = item.type === 'dir';
             var isRO  = ! isDir && READONLY_EXTS.indexOf( item.ext ) !== -1;
 
-            var nameCell = isDir
-                ? '<a href="#" class="kfm-dir-link" data-rel="' + esc( item.rel ) + '">' + esc( item.name ) + '</a>'
-                : '<a href="#" class="kfm-file-link" data-rel="' + esc( item.rel ) + '">' + esc( item.name ) + '</a>'
-                  + ( isRO ? ' <span class="kfm-badge-ro" title="Read-only">RO</span>' : '' );
+            // ── Name cell ──
+            // Directories: always a clickable link — navigation relies on kfm_list;
+            //   the server enforces the 'list' permission, no client gate needed.
+            // Files: link when read is permitted (opens editor/viewer); plain text otherwise.
+            var nameCell;
+            if ( isDir ) {
+                nameCell = '<a href="#" class="kfm-dir-link" data-rel="' + esc( item.rel ) + '">' + esc( item.name ) + '</a>';
+            } else if ( canDo( 'read' ) ) {
+                nameCell = '<a href="#" class="kfm-file-link" data-rel="' + esc( item.rel ) + '">' + esc( item.name ) + '</a>'
+                         + ( isRO ? ' <span class="kfm-badge-ro" title="Read-only">RO</span>' : '' );
+            } else {
+                nameCell = esc( item.name )
+                         + ( isRO ? ' <span class="kfm-badge-ro" title="Read-only">RO</span>' : '' );
+            }
 
-            var downloadBtn = isDir ? '' :
-                '<a class="kfm-row-btn kfm-btn-download" href="' + esc( KFM.ajaxUrl ) + '?action=kfm_download&nonce=' + esc( KFM.nonce ) + '&path=' + encodeURIComponent( item.rel ) + '" title="Download" download>' +
+            // ── Row action buttons ──
+
+            // Download — requires read
+            var downloadBtn = ( ! isDir && canDo( 'read' ) )
+                ? '<a class="kfm-row-btn kfm-btn-download"' +
+                    ' href="' + esc( KFM.ajaxUrl ) + '?action=kfm_download&nonce=' + esc( KFM.nonce ) + '&path=' + encodeURIComponent( item.rel ) + '"' +
+                    ' title="Download" download>' +
                     '<span uk-icon="icon:download;ratio:0.75"></span>' +
-                '</a>';
+                  '</a>'
+                : '';
 
-            var editBtn = ( isDir || isRO ) ? '' :
-                '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="Edit">' +
+            // Edit — requires read; hidden for dirs and read-only files
+            var editBtn = ( ! isDir && ! isRO && canDo( 'read' ) )
+                ? '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="Edit">' +
                     '<span uk-icon="icon:pencil;ratio:0.75"></span>' +
-                '</button>';
+                  '</button>'
+                : '';
+
+            // Rename — requires rename
+            var renameBtn = canDo( 'rename' )
+                ? '<button class="kfm-row-btn kfm-btn-rename2" data-rel="' + esc( item.rel ) + '" data-name="' + esc( item.name ) + '" title="Rename">' +
+                    '<span uk-icon="icon:tag;ratio:0.75"></span>' +
+                  '</button>'
+                : '';
+
+            // Chmod — requires chmod
+            var permBtn = canDo( 'chmod' )
+                ? '<button class="kfm-row-btn kfm-btn-perm" data-rel="' + esc( item.rel ) + '" data-perms="' + esc( item.perms ) + '" title="Permissions">' +
+                    '<span uk-icon="icon:lock;ratio:0.75"></span>' +
+                  '</button>'
+                : '';
+
+            // Delete — requires delete
+            var deleteBtn = canDo( 'delete' )
+                ? '<button class="kfm-row-btn kfm-row-btn-del kfm-btn-del" data-rel="' + esc( item.rel ) + '" title="Delete">' +
+                    '<span uk-icon="icon:trash;ratio:0.75"></span>' +
+                  '</button>'
+                : '';
+
+            // Check cell — omit entirely when no bulk actions are available
+            var checkCell = hasBulk
+                ? '<td class="kfm-col-check"><input class="uk-checkbox kfm-row-check" type="checkbox" value="' + esc( item.rel ) + '"></td>'
+                : '';
 
             $tbody.append(
                 '<tr data-rel="' + esc( item.rel ) + '" data-type="' + item.type + '">' +
-                    '<td class="kfm-col-check"><input class="uk-checkbox kfm-row-check" type="checkbox" value="' + esc( item.rel ) + '"></td>' +
+                    checkCell +
                     '<td class="kfm-col-icon"><span uk-icon="icon:' + ico.icon + ';ratio:0.9" class="' + ico.cls + '"></span></td>' +
                     '<td class="kfm-col-name">' + nameCell + '</td>' +
                     '<td class="kfm-col-size">' + ( isDir ? '\u2013' : humanSize( item.size ) ) + '</td>' +
                     '<td class="kfm-col-perms"><code class="kfm-perms-code">' + esc( item.perms ) + '</code></td>' +
                     '<td class="kfm-col-mtime">' + humanDate( item.mtime ) + '</td>' +
-                    '<td class="kfm-col-actions">' +
-                        downloadBtn +
-                        editBtn +
-                        '<button class="kfm-row-btn kfm-btn-rename2" data-rel="' + esc( item.rel ) + '" data-name="' + esc( item.name ) + '" title="Rename"><span uk-icon="icon:tag;ratio:0.75"></span></button>' +
-                        '<button class="kfm-row-btn kfm-btn-perm" data-rel="' + esc( item.rel ) + '" data-perms="' + esc( item.perms ) + '" title="Permissions"><span uk-icon="icon:lock;ratio:0.75"></span></button>' +
-                        '<button class="kfm-row-btn kfm-row-btn-del kfm-btn-del" data-rel="' + esc( item.rel ) + '" title="Delete"><span uk-icon="icon:trash;ratio:0.75"></span></button>' +
-                    '</td>' +
+                    '<td class="kfm-col-actions">' + downloadBtn + editBtn + renameBtn + permBtn + deleteBtn + '</td>' +
                 '</tr>'
             );
         } );
@@ -280,7 +371,6 @@
             renderBreadcrumbs( data.breadcrumbs );
             sortAndRender();
             setStatus( '' );
-            // Render the tree once on first load
             if ( rel === '' && $( '#kfm-tree' ).is( ':empty' ) ) renderTree( '', $( '#kfm-tree' ) );
         } ).catch( function ( err ) {
             var msg = errMsg( err );
@@ -313,7 +403,7 @@
         $( '#kfm-btn-paste' ).prop( 'disabled', ! hasClip );
     }
 
-    /* ─────────────────────────────────────── UIKit prompt modal ── */
+    /* ─────────────────────────────────── UIKit prompt modal ── */
 
     function promptModal( title, label, defaultVal ) {
         return new Promise( function ( resolve, reject ) {
@@ -359,7 +449,6 @@
 
         var content = state.editorCM.getValue();
 
-        // Warn if potentially dangerous functions are detected in executable file types
         var ext = ( state.editorRel.split( '.' ).pop() || '' ).toLowerCase();
         if ( [ 'php', 'js', 'sh' ].indexOf( ext ) !== -1 && DANGEROUS_FN_RE.test( content ) ) {
             if ( ! window.confirm( ( KFM.i18n && KFM.i18n.warnDangerousFn ) || "This file contains potentially dangerous functions.\n\nSave anyway?" ) ) {
@@ -388,12 +477,14 @@
 
             $( '#kfm-editor-textarea' ).val( data.content );
             $( '#kfm-editor-mode' ).text( data.ext || 'text' );
-            $( '#kfm-editor-save' ).prop( 'disabled', isRO ).toggle( ! isRO );
+
+            // Save button visible only when both write is permitted and file is not read-only
+            var canSave = canDo( 'write' ) && ! isRO;
+            $( '#kfm-editor-save' ).prop( 'disabled', ! canSave ).toggle( canSave );
 
             modal.show();
 
             UIkit.util.once( document, 'shown', function () {
-                // CodeMirror may not be available in all contexts (e.g. network admin)
                 if ( ! wp.codeEditor || ! wp.codeEditor.initialize ) {
                     state.editorCM = null;
                     $( '#kfm-editor-textarea' ).show();
@@ -413,7 +504,7 @@
                     codemirror: {
                         mode, lineNumbers:true, lineWrapping:true, indentUnit:4,
                         tabSize:4, indentWithTabs:false, matchBrackets:true, autoCloseBrackets:true,
-                        readOnly: isRO,
+                        readOnly: ! canSave,
                         extraKeys: { 'Ctrl-S': saveEditor, 'Cmd-S': saveEditor, 'Ctrl-/': 'toggleComment', 'Ctrl-F': 'findPersistent' },
                     },
                 } );
@@ -456,7 +547,6 @@
     /* ─────────────────────────────────────────────── Upload ── */
 
     function uploadFiles( files ) {
-        // Client-side validation before anything hits the server
         var rejected = validateUploadFiles( files );
         if ( rejected.length ) {
             notify(
@@ -470,7 +560,6 @@
         var dir = state.currentPath;
         var p   = $.when();
 
-        // Chain uploads sequentially so the directory refresh happens once at the end
         Array.from( files ).forEach( function ( file ) {
             p = p.then( function () {
                 var fd = new FormData();
@@ -508,9 +597,15 @@
 
     function bindEvents() {
 
-        /* ── Navigation ── */
-        $( '#kfm-breadcrumb' ).on( 'click', 'a[data-rel]', function (e) { e.preventDefault(); loadDir( $( this ).data( 'rel' ) ); } );
-        $( '#kfm-tbody' ).on( 'click', '.kfm-dir-link', function (e) { e.preventDefault(); loadDir( $( this ).data( 'rel' ) ); } );
+        /* ── Navigation ──
+           Directory links are never gated client-side. loadDir fires kfm_list and
+           the server enforces the 'list' permission independently. */
+        $( '#kfm-breadcrumb' ).on( 'click', 'a[data-rel]', function (e) {
+            e.preventDefault(); loadDir( $( this ).data( 'rel' ) );
+        } );
+        $( '#kfm-tbody' ).on( 'click', '.kfm-dir-link', function (e) {
+            e.preventDefault(); loadDir( $( this ).data( 'rel' ) );
+        } );
         $( '#kfm-tree' ).on( 'click', '.kfm-tree-link', function (e) {
             e.preventDefault();
             loadDir( $( this ).data( 'rel' ) );
@@ -567,27 +662,36 @@
         $( '#kfm-btn-upload' ).on( 'click', function () { $( '#kfm-file-input' ).click(); } );
         $( '#kfm-file-input' ).on( 'change', function () { if ( this.files.length ) uploadFiles( this.files ); } );
 
-        /* ── Drag & drop ── */
-        var $wrap = $( '#kfm-wrap' );
-        $wrap.on( 'dragover', function (e) { e.preventDefault(); $( '#kfm-dropzone' ).addClass( 'kfm-dropzone-active' ); } );
-        $wrap.on( 'dragleave drop', function (e) { e.preventDefault(); $( '#kfm-dropzone' ).removeClass( 'kfm-dropzone-active' ); } );
-        $wrap.on( 'drop', function (e) {
-            var files = e.originalEvent.dataTransfer.files;
-            if ( files.length ) uploadFiles( files );
-        } );
+        /* ── Drag & drop — only wire when upload is permitted ── */
+        if ( canDo( 'upload' ) ) {
+            var $wrap = $( '#kfm-wrap' );
+            $wrap.on( 'dragover', function (e) { e.preventDefault(); $( '#kfm-dropzone' ).addClass( 'kfm-dropzone-active' ); } );
+            $wrap.on( 'dragleave drop', function (e) { e.preventDefault(); $( '#kfm-dropzone' ).removeClass( 'kfm-dropzone-active' ); } );
+            $wrap.on( 'drop', function (e) {
+                var files = e.originalEvent.dataTransfer.files;
+                if ( files.length ) uploadFiles( files );
+            } );
+        }
 
-        /* ── Editor ── */
-        $( '#kfm-tbody' ).on( 'click', '.kfm-btn-edit', function () { openEditor( $( this ).data( 'rel' ) ); } );
+        /* ── Editor — file-link and edit-button both open the editor.
+           Note: file links are only rendered when canDo('read') is true (see renderTable),
+           so these handlers fire only for permitted users. ── */
+        $( '#kfm-tbody' ).on( 'click', '.kfm-btn-edit', function () {
+            openEditor( $( this ).data( 'rel' ) );
+        } );
+        $( '#kfm-tbody' ).on( 'click', '.kfm-file-link', function (e) {
+            e.preventDefault();
+            openEditor( $( this ).data( 'rel' ) );
+        } );
         $( '#kfm-tbody' ).on( 'dblclick', 'tr[data-type="file"]', function () {
+            if ( ! canDo( 'read' ) ) return;
             var rel = $( this ).data( 'rel' );
             var ext = ( rel.split( '.' ).pop() || '' ).toLowerCase();
             var txt = [ 'php','js','css','html','htm','json','xml','txt','md','sql','sh','ts','csv','log','ini','env','htaccess' ];
             if ( txt.indexOf( ext ) !== -1 || rel.indexOf( '.' ) === -1 ) openEditor( rel );
         } );
-        $( '#kfm-tbody' ).on( 'click', '.kfm-file-link', function (e) { e.preventDefault(); openEditor( $( this ).data( 'rel' ) ); } );
         $( '#kfm-editor-save' ).on( 'click', saveEditor );
 
-        // Clean up CodeMirror instance when the editor modal closes
         UIkit.util.on( '#kfm-editor-modal', 'hidden', function () {
             if ( state.editorCM ) { try { state.editorCM.toTextArea(); } catch(e) {} state.editorCM = null; }
         } );
@@ -681,12 +785,10 @@
         $( '#kfm-chmod-apply' ).on( 'click', function () {
             var mode = $( '#kfm-chmod-octal' ).val();
 
-            // Client-side floor check
             if ( CHMOD_FLOOR > 0 && parseInt( mode, 8 ) < CHMOD_FLOOR ) {
                 notify( 'Permissions cannot be set below the minimum floor (' + KFM.chmodFloor + ').', 'warning', 0 );
                 return;
             }
-            // World-writable is always blocked
             if ( parseInt( mode, 8 ) & 0o002 ) {
                 notify( 'World-writable permissions are not allowed.', 'danger', 0 );
                 return;
@@ -704,6 +806,7 @@
 
     $( function () {
         initTheme();
+        applyOpVisibility();
         bindEvents();
         initResizer();
         loadDir( '' );
