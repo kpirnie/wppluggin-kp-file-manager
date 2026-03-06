@@ -60,6 +60,10 @@ if( !class_exists('KFM_Admin_Menu') ) {
         public function register(): void {
             add_action( 'admin_menu',            [ $this, 'admin_menu' ] );
             add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+
+            // make sure its available at the network level as well
+            add_action( 'network_admin_menu',    [ $this, 'admin_menu' ] );
+            add_action( 'network_admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
         }
 
         /**

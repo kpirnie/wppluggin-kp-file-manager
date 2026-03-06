@@ -39,7 +39,7 @@ function kfm_audit_url( array $extra = [] ): string {
     <h1 style="display:flex;align-items:center;gap:12px">
         <?php esc_html_e( 'File Manager – Audit Log', 'kfm-file-manager' ); ?>
         <span style="font-size:13px;font-weight:normal;color:#666">
-            <?php printf( esc_html__( '%d total entries (max 500)', 'kfm-file-manager' ), $total ); ?>
+            <?php printf( esc_html__( '%d total entries', 'kfm-file-manager' ), $total ); ?>
         </span>
     </h1>
 

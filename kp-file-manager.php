@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       KP – File Manager
  * Plugin URI:        https://kevinpirnie.com
- * Description:       A secure file manager for WordPress with a built-in CodeMirror text editor. All operations are sandboxed inside wp-content.
+ * Description:       A secure, role-aware file manager for WordPress. Browse, edit, upload, and manage files directly from the admin — no FTP required. Sandboxed to wp-content with per-role permissions, audit logging, and a built-in syntax-highlighting code editor.
  * Version:           1.0.57
  * Requires at least: 6.0
  * Requires PHP:      8.2
@@ -33,6 +33,7 @@ spl_autoload_register( function ( string $class_name ): void {
 
 // Initialize the plugin.
 add_action( 'plugins_loaded', [ 'KFM_Plugin', 'init' ] );
+add_action( 'network_admin_notices',  [ 'KFM_Plugin', 'init' ] );
 
 // make sure the class is only defined once, in case of multiple includes or autoloading issues
 if( !class_exists('KFM_Plugin') ) {

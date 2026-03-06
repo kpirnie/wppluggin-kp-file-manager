@@ -257,8 +257,9 @@
             setStatus( '' );
             if ( rel === '' && $( '#kfm-tree' ).is( ':empty' ) ) renderTree( '', $( '#kfm-tree' ) );
         } ).catch( function ( err ) {
-            setStatus( err );
-            notify( esc( err ), 'danger', 0 );
+            var msg = ( err && err.message ) ? err.message : ( typeof err === 'string' ? err : ( KFM.i18n.errorGeneric || 'An error occurred.' ) );
+            setStatus( msg );
+            notify( esc( msg ), 'danger', 0 );
         } );
     }
 

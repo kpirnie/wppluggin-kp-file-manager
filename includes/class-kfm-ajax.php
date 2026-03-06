@@ -101,7 +101,7 @@ if( !class_exists('KFM_Ajax') ) {
 
                 // if the referer host does not match the site host, block the request and log it
                 if ( $ref_host !== $site_host ) {
-                    KFM_Audit_Log::write( 'dispatch', '', 'blocked – bad referer: ' . $ref_host );
+                    KFM_Audit_Log::write( 'dispatch', '', 'blocked - bad referer: ' . $ref_host );
                     wp_send_json_error( [ 'message' => __( 'Request origin mismatch.', 'kpfm' ) ], 403 );
                 }
             }
