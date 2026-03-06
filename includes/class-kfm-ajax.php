@@ -33,7 +33,7 @@ if( !class_exists('KFM_Ajax') ) {
         private const PUBLIC_ACTIONS = [
             'kfm_list', 'kfm_read', 'kfm_write', 'kfm_create_file',
             'kfm_create_dir', 'kfm_delete', 'kfm_rename', 'kfm_copy',
-            'kfm_move', 'kfm_chmod', 'kfm_upload',
+            'kfm_move', 'kfm_chmod', 'kfm_upload', 'kfm_download',
         ];
 
         /**
@@ -134,6 +134,7 @@ if( !class_exists('KFM_Ajax') ) {
                 case 'kfm_move':         $this->handle_move();        break;
                 case 'kfm_chmod':        $this->handle_chmod();       break;
                 case 'kfm_upload':       $this->handle_upload();      break;
+                case 'kfm_download':     $this->handle_download();    break;
                 default:
                     wp_send_json_error( [ 'message' => __( 'Unknown action.', 'kpfm' ) ], 400 );
             }
@@ -368,6 +369,45 @@ if( !class_exists('KFM_Ajax') ) {
             }
             $dir = $this->rel( 'dir' );
             $this->send( $this->fm->upload( $dir, $_FILES['file'] ), 'kfm_upload', $dir . '/' . ( $_FILES['file']['name'] ?? '' ) );
+        }
+
+        /**
+         * Handle the 'download' action.
+         * Streams the file to the browser as a download.
+         *
+         * @package KP - File Manager
+         * @since 1.0.0
+         * @author Kevin Pirnie <iam@kevinpirnie.com>
+         *
+         * @return void
+         *
+         */
+        private function handle_download(): void {
+            $rel  = $this->rel();
+            $path = $this->fm->resolve( $rel );
+
+            if ( ! $path || ! is_file( $path ) ) {
+                wp_send_json_error( [ 'message' => __( 'File not found.', 'kpfm' ) ], 404 );
+            }
+
+            $filename = basename( $path );
+            $size     = filesize( $path );
+            $mime     = function_exists( 'finfo_open' )
+                ? finfo_file( finfo_open( FILEINFO_MIME_TYPE ), $path )
+                : 'application/octet-stream';
+
+            // Log the download
+            KFM_Audit_Log::write( 'kfm_download', $rel, 'ok' );
+
+            // Stream the file
+            nocache_headers();
+            header( 'Content-Type: ' . $mime );
+            header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+            header( 'Content-Length: ' . $size );
+            header( 'X-Content-Type-Options: nosniff' );
+            flush();
+            readfile( $path );
+            exit;
         }
 
         /**

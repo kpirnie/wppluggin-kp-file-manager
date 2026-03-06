@@ -194,6 +194,11 @@
                     '<span uk-icon="icon:pencil;ratio:0.75"></span>' +
                 '</button>';
 
+            var downloadBtn = isDir ? '' :
+                '<a class="kfm-row-btn kfm-btn-download" href="' + esc( KFM.ajaxUrl ) + '?action=kfm_download&nonce=' + esc( KFM.nonce ) + '&path=' + encodeURIComponent( item.rel ) + '" title="Download" download>' +
+                    '<span uk-icon="icon:download;ratio:0.75"></span>' +
+                '</a>';
+
             $tbody.append(
                 '<tr data-rel="' + esc( item.rel ) + '" data-type="' + item.type + '">' +
                     '<td class="kfm-col-check"><input class="uk-checkbox kfm-row-check" type="checkbox" value="' + esc( item.rel ) + '"></td>' +
@@ -203,6 +208,7 @@
                     '<td class="kfm-col-perms"><code class="kfm-perms-code">' + esc( item.perms ) + '</code></td>' +
                     '<td class="kfm-col-mtime">' + humanDate( item.mtime ) + '</td>' +
                     '<td class="kfm-col-actions">' +
+                        downloadBtn +
                         editBtn +
                         '<button class="kfm-row-btn kfm-btn-rename2" data-rel="' + esc( item.rel ) + '" data-name="' + esc( item.name ) + '" title="Rename"><span uk-icon="icon:tag;ratio:0.75"></span></button>' +
                         '<button class="kfm-row-btn kfm-btn-perm" data-rel="' + esc( item.rel ) + '" data-perms="' + esc( item.perms ) + '" title="Permissions"><span uk-icon="icon:lock;ratio:0.75"></span></button>' +

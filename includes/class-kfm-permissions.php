@@ -116,6 +116,7 @@ class KFM_Permissions {
             'kfm_delete'      => 'delete',
             'kfm_chmod'       => 'chmod',
             'kfm_upload'      => 'upload',
+            'kfm_download'    => 'read',
         ];
         return $map[ $action ] ?? 'write';
     }
