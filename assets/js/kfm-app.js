@@ -283,18 +283,23 @@
                 : '';
 
             // Edit / Preview — requires read; hidden for dirs
-            // Images get a preview (eye) button; text files get the pencil editor button
+            // Images → preview modal; editable text types → editor; everything else → no edit button (download only)
             var editBtn = '';
             if ( ! isDir && canDo( 'read' ) ) {
                 if ( isImage( item.rel ) ) {
                     editBtn = '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="Preview">' +
                                 '<span uk-icon="icon:image;ratio:0.75"></span>' +
-                              '</button>';
-                } else if ( ! isRO ) {
+                            '</button>';
+                } else if ( isTextFile( item.rel ) && ! isRO ) {
                     editBtn = '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="Edit">' +
                                 '<span uk-icon="icon:pencil;ratio:0.75"></span>' +
-                              '</button>';
+                            '</button>';
+                } else if ( isTextFile( item.rel ) && isRO ) {
+                    editBtn = '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="View (read-only)">' +
+                                '<span uk-icon="icon:file-text;ratio:0.75"></span>' +
+                            '</button>';
                 }
+                // Binary/unknown files: no edit button — download button already handles them
             }
 
             // Rename — requires rename
@@ -468,6 +473,39 @@
         $( '#kfm-image-preview' ).attr( { src: url, alt: name } );
         $( '#kfm-image-caption' ).text( name );
         UIkit.modal( '#kfm-image-modal' ).show();
+    }
+
+    /* ─────────────────────────────────────── Editable text file types ── */
+
+    var TEXT_EXTS = [
+        'php','phtml','php3','php4','php5','php7',
+        'js','jsx','ts','tsx','mjs','cjs',
+        'css','scss','sass','less',
+        'html','htm','xhtml','shtml',
+        'xml','xsl','xslt',
+        'json','json5','jsonc',
+        'yaml','yml','toml','ini','cfg','conf','config',
+        'sql',
+        'sh','bash','zsh','fish','ksh','csh',
+        'py','rb','pl','lua','go','java','c','cpp','cc','h','hpp','cs','rs','kt','swift',
+        'txt','text','md','markdown','rst','log','nfo',
+        'csv','tsv',
+        'env','htaccess','htpasswd','gitignore','gitattributes','editorconfig',
+        'asp','aspx','jsp','cfm','twig','blade','vue','svelte',
+        'po','pot',
+    ];
+
+    var NO_EXT_TEXT_NAMES = [
+        'dockerfile','makefile','vagrantfile','procfile',
+        'gemfile','rakefile','guardfile','brewfile','podfile',
+    ];
+
+    function isTextFile( rel ) {
+        var base = rel.split( '/' ).pop().toLowerCase();
+        var dot  = base.lastIndexOf( '.' );
+        if ( dot === -1 ) return NO_EXT_TEXT_NAMES.indexOf( base ) !== -1;
+        var ext = base.slice( dot + 1 );
+        return TEXT_EXTS.indexOf( ext ) !== -1;
     }
 
     /* ───────────────────────────────────────── Editor / save ── */
@@ -712,26 +750,33 @@
                 openEditor( rel );
             }
         } );
-        $( '#kfm-tbody' ).on( 'click', '.kfm-file-link', function (e) {
+       $( '#kfm-tbody' ).on( 'click', '.kfm-file-link', function (e) {
             e.preventDefault();
             var rel  = $( this ).data( 'rel' );
             var name = $( this ).text();
             if ( isImage( rel ) ) {
                 openImagePreview( rel, name );
-            } else {
+            } else if ( isTextFile( rel ) ) {
                 openEditor( rel );
+            } else {
+                // Binary file — trigger download
+                window.location.href = KFM.ajaxUrl
+                    + '?action=kfm_download&nonce=' + encodeURIComponent( KFM.nonce )
+                    + '&path=' + encodeURIComponent( rel );
             }
         } );
         $( '#kfm-tbody' ).on( 'dblclick', 'tr[data-type="file"]', function () {
             if ( ! canDo( 'read' ) ) return;
             var rel = $( this ).data( 'rel' );
-            var ext = ( rel.split( '.' ).pop() || '' ).toLowerCase();
             if ( isImage( rel ) ) {
                 openImagePreview( rel, rel.split( '/' ).pop() );
-                return;
+            } else if ( isTextFile( rel ) ) {
+                openEditor( rel );
+            } else {
+                window.location.href = KFM.ajaxUrl
+                    + '?action=kfm_download&nonce=' + encodeURIComponent( KFM.nonce )
+                    + '&path=' + encodeURIComponent( rel );
             }
-            var txt = [ 'php','js','css','html','htm','json','xml','txt','md','sql','sh','ts','csv','log','ini','env','htaccess' ];
-            if ( txt.indexOf( ext ) !== -1 || rel.indexOf( '.' ) === -1 ) openEditor( rel );
         } );
         $( '#kfm-editor-save' ).on( 'click', saveEditor );
 
