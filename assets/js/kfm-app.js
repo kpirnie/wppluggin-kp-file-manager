@@ -1,12 +1,12 @@
 /**
  * KFM File Manager – Frontend Application v1.0.5
- * Depends on: jQuery, UIKit 3, UIKit Icons, wp-codemirror
+ * Depends on: jQuery, wp-codemirror, Dashicons
+ * No UIKit dependency – uses native modal/notification system.
  */
-( function ( $, KFM, UIkit ) {
+( function ( $, KFM ) {
     'use strict';
 
     /* ─────────────────────────────────────────────────── State ── */
-
     var state = {
         currentPath : '',
         items       : [],
@@ -19,363 +19,314 @@
         chmodRel    : null,
     };
 
+    /* ──────────────────────────── Native modal system ── */
+    var KfmModal = ( function () {
+        var stack = [];
+
+        function show( selector ) {
+            var $m = $( selector );
+            if ( ! $m.length ) return;
+            $m.addClass( 'kfm-modal-open' );
+            $( 'body' ).addClass( 'kfm-modal-active' );
+            if ( stack.indexOf( selector ) === -1 ) stack.push( selector );
+            setTimeout( function () { $m.trigger( 'kfm:shown' ); }, 50 );
+        }
+
+        function hide( selector ) {
+            var $m = $( selector );
+            if ( ! $m.length ) return;
+            $m.removeClass( 'kfm-modal-open' );
+            stack = stack.filter( function ( s ) { return s !== selector; } );
+            if ( ! stack.length ) $( 'body' ).removeClass( 'kfm-modal-active' );
+            $m.trigger( 'kfm:hidden' );
+        }
+
+        function init() {
+            $( document ).on( 'keydown.kfm-modal', function ( e ) {
+                if ( e.key === 'Escape' && stack.length ) {
+                    hide( stack[ stack.length - 1 ] );
+                }
+            } );
+            $( document ).on( 'click.kfm-modal', '.kfm-modal.kfm-modal-open', function ( e ) {
+                if ( $( e.target ).is( '.kfm-modal' ) && $( this ).data( 'bg-close' ) ) {
+                    hide( '#' + $( this ).attr( 'id' ) );
+                }
+            } );
+            $( document ).on( 'click.kfm-modal', '[data-kfm-modal-close], .kfm-modal-close', function () {
+                var $m = $( this ).closest( '.kfm-modal' );
+                if ( $m.length ) hide( '#' + $m.attr( 'id' ) );
+            } );
+        }
+
+        return { show: show, hide: hide, init: init };
+    }() );
+
     /* ─────────────────────────────── Permission helpers ── */
-
     var ALLOWED_OPS = ( KFM.allowedOps && KFM.allowedOps.length ) ? KFM.allowedOps : [];
+    function canDo( op ) { return ALLOWED_OPS.indexOf( op ) !== -1; }
 
-    function canDo( op ) {
-        return ALLOWED_OPS.indexOf( op ) !== -1;
-    }
-
-    /**
-     * Hides toolbar buttons and table columns the current user cannot use.
-     * Called once on boot before the first directory load.
-     */
     function applyOpVisibility() {
-
-        // Write: new file/folder group + copy/cut/paste group
         if ( ! canDo( 'write' ) ) {
             $( '#kfm-btn-new-file' ).closest( '.kfm-btn-group' ).hide();
             $( '#kfm-btn-copy' ).closest( '.kfm-btn-group' ).hide();
         }
-
-        // Upload
-        if ( ! canDo( 'upload' ) ) {
-            $( '#kfm-btn-upload' ).hide();
-        }
-
-        // Rename / chmod group (toolbar)
+        if ( ! canDo( 'upload' ) ) $( '#kfm-btn-upload' ).hide();
         if ( ! canDo( 'rename' ) ) $( '#kfm-btn-rename' ).hide();
         if ( ! canDo( 'chmod'  ) ) $( '#kfm-btn-chmod'  ).hide();
         if ( ! canDo( 'rename' ) && ! canDo( 'chmod' ) ) {
             $( '#kfm-btn-rename' ).closest( '.kfm-btn-group' ).hide();
         }
-
-        // Delete toolbar button
         if ( ! canDo( 'delete' ) ) $( '#kfm-btn-delete' ).hide();
 
-        // Perms column (th + all tds rendered later) — inject CSS so it covers dynamic rows too
         if ( ! canDo( 'chmod' ) ) {
-            $( '<style id="kfm-hide-perms">.kfm-col-perms { display:none !important; }</style>' )
-                .appendTo( 'head' );
+            $( '<style id="kfm-hide-perms">.kfm-col-perms{display:none!important}</style>' ).appendTo( 'head' );
         }
-
-        // Check-all column header — hide when no bulk operations are available
         var hasBulk = canDo( 'write' ) || canDo( 'rename' ) || canDo( 'chmod' ) || canDo( 'delete' );
-        if ( ! hasBulk ) {
-            $( '#kfm-table thead .kfm-col-check' ).hide();
-        }
+        if ( ! hasBulk ) $( '#kfm-table thead .kfm-col-check' ).hide();
 
-        // Collapse toolbar dividers that now sit between two hidden sections
         $( '.kfm-toolbar-divider' ).each( function () {
-            var $d      = $( this );
-            var prevVis = $d.prevAll( '.uk-button-group, .uk-button, .kfm-btn-sep' ).filter( ':visible' ).length;
-            var nextVis = $d.nextAll( '.uk-button-group, .uk-button, .kfm-btn-sep' ).filter( ':visible' ).length;
-            if ( ! prevVis || ! nextVis ) $d.hide();
+            var $d = $( this );
+            var pv = $d.prevAll( '.kfm-btn-group, .kfm-btn, .kfm-btn-sep' ).filter( ':visible' ).length;
+            var nv = $d.nextAll( '.kfm-btn-group, .kfm-btn, .kfm-btn-sep' ).filter( ':visible' ).length;
+            if ( ! pv || ! nv ) $d.hide();
         } );
     }
 
-    /* ──────────────────────────────────── Client-side security ── */
-
-    var BLOCKED_EXTS    = ( KFM.blockedExts  && KFM.blockedExts.length  ) ? KFM.blockedExts  : [
-        'php','phtml','phar','php3','php4','php5','php7','phps','pht','exe','sh','pl','cgi','htaccess','htpasswd','shtml','asis'
-    ];
-    var READONLY_EXTS   = ( KFM.readonlyExts && KFM.readonlyExts.length ) ? KFM.readonlyExts : [];
-    var CHMOD_FLOOR     = KFM.chmodFloor ? parseInt( KFM.chmodFloor, 8 ) : 0;
-
-    var DANGEROUS_NAMES = [ '.htaccess', '.htpasswd', '.env', '.user.ini', 'php.ini', 'web.config' ];
+    /* ─────────────────────────────────── Security ── */
+    var BLOCKED_EXTS  = ( KFM.blockedExts  && KFM.blockedExts.length  ) ? KFM.blockedExts  :
+        ['php','phtml','phar','php3','php4','php5','php7','phps','pht','exe','sh','pl','cgi','htaccess','htpasswd','shtml','asis'];
+    var READONLY_EXTS = ( KFM.readonlyExts && KFM.readonlyExts.length ) ? KFM.readonlyExts : [];
+    var CHMOD_FLOOR   = KFM.chmodFloor ? parseInt( KFM.chmodFloor, 8 ) : 0;
+    var DANGEROUS_NAMES = ['.htaccess','.htpasswd','.env','.user.ini','php.ini','web.config'];
     var DANGEROUS_FN_RE = /\b(eval|base64_decode|exec|system|passthru|shell_exec|popen|proc_open|assert)\s*\(/i;
 
     function validateUploadFiles( files ) {
         var rejected = [];
         Array.from( files ).forEach( function ( f ) {
             var name = f.name.toLowerCase();
-            var ext  = name.lastIndexOf( '.' ) !== -1 ? name.split( '.' ).pop() : '';
-            if ( DANGEROUS_NAMES.indexOf( name ) !== -1 ) {
-                rejected.push( f.name + ' \u2014 filename not permitted' );
-            } else if ( BLOCKED_EXTS.indexOf( ext ) !== -1 ) {
-                rejected.push( f.name + ' \u2014 .' + ext + ' files are blocked' );
-            }
+            var ext  = name.lastIndexOf('.') !== -1 ? name.split('.').pop() : '';
+            if ( DANGEROUS_NAMES.indexOf( name ) !== -1 ) rejected.push( f.name + ' \u2014 filename not permitted' );
+            else if ( BLOCKED_EXTS.indexOf( ext ) !== -1 ) rejected.push( f.name + ' \u2014 .' + ext + ' files are blocked' );
         } );
         return rejected;
     }
 
-    /* ─────────────────────────────────────────── File type icons ── */
-
+    /* ─────────────────────────────── Dashicon icon map ── */
     var ICON_MAP = {
-        dir  : { icon: 'folder',       cls: 'kfm-dir-icon'  },
-        php  : { icon: 'code',         cls: 'kfm-file-icon' },
-        js   : { icon: 'code',         cls: 'kfm-file-icon' },
-        ts   : { icon: 'code',         cls: 'kfm-file-icon' },
-        css  : { icon: 'paint-bucket', cls: 'kfm-file-icon' },
-        html : { icon: 'code',         cls: 'kfm-file-icon' },
-        htm  : { icon: 'code',         cls: 'kfm-file-icon' },
-        json : { icon: 'code',         cls: 'kfm-file-icon' },
-        xml  : { icon: 'code',         cls: 'kfm-file-icon' },
-        sql  : { icon: 'database',     cls: 'kfm-file-icon' },
-        sh   : { icon: 'terminal',     cls: 'kfm-file-icon' },
-        jpg  : { icon: 'image',        cls: 'kfm-file-icon' },
-        jpeg : { icon: 'image',        cls: 'kfm-file-icon' },
-        png  : { icon: 'image',        cls: 'kfm-file-icon' },
-        gif  : { icon: 'image',        cls: 'kfm-file-icon' },
-        svg  : { icon: 'image',        cls: 'kfm-file-icon' },
-        webp : { icon: 'image',        cls: 'kfm-file-icon' },
-        pdf  : { icon: 'file-pdf',     cls: 'kfm-file-icon' },
-        zip  : { icon: 'album',        cls: 'kfm-file-icon' },
-        gz   : { icon: 'album',        cls: 'kfm-file-icon' },
-        tar  : { icon: 'album',        cls: 'kfm-file-icon' },
-        rar  : { icon: 'album',        cls: 'kfm-file-icon' },
-        mp3  : { icon: 'receiver',     cls: 'kfm-file-icon' },
-        mp4  : { icon: 'video-camera', cls: 'kfm-file-icon' },
-        txt  : { icon: 'file-text',    cls: 'kfm-file-icon' },
-        md   : { icon: 'file-text',    cls: 'kfm-file-icon' },
-        csv  : { icon: 'table',        cls: 'kfm-file-icon' },
-        _def : { icon: 'file-text',    cls: 'kfm-file-icon' },
+        dir  : { dashicon:'dashicons-category',         cls:'kfm-dir-icon'  },
+        php  : { dashicon:'dashicons-editor-code',      cls:'kfm-file-icon' },
+        js   : { dashicon:'dashicons-editor-code',      cls:'kfm-file-icon' },
+        ts   : { dashicon:'dashicons-editor-code',      cls:'kfm-file-icon' },
+        css  : { dashicon:'dashicons-admin-appearance', cls:'kfm-file-icon' },
+        html : { dashicon:'dashicons-editor-code',      cls:'kfm-file-icon' },
+        htm  : { dashicon:'dashicons-editor-code',      cls:'kfm-file-icon' },
+        json : { dashicon:'dashicons-editor-code',      cls:'kfm-file-icon' },
+        xml  : { dashicon:'dashicons-editor-code',      cls:'kfm-file-icon' },
+        sql  : { dashicon:'dashicons-database',         cls:'kfm-file-icon' },
+        sh   : { dashicon:'dashicons-editor-code',      cls:'kfm-file-icon' },
+        jpg  : { dashicon:'dashicons-format-image',     cls:'kfm-file-icon' },
+        jpeg : { dashicon:'dashicons-format-image',     cls:'kfm-file-icon' },
+        png  : { dashicon:'dashicons-format-image',     cls:'kfm-file-icon' },
+        gif  : { dashicon:'dashicons-format-image',     cls:'kfm-file-icon' },
+        svg  : { dashicon:'dashicons-format-image',     cls:'kfm-file-icon' },
+        webp : { dashicon:'dashicons-format-image',     cls:'kfm-file-icon' },
+        pdf  : { dashicon:'dashicons-media-document',   cls:'kfm-file-icon' },
+        zip  : { dashicon:'dashicons-archive',          cls:'kfm-file-icon' },
+        gz   : { dashicon:'dashicons-archive',          cls:'kfm-file-icon' },
+        tar  : { dashicon:'dashicons-archive',          cls:'kfm-file-icon' },
+        rar  : { dashicon:'dashicons-archive',          cls:'kfm-file-icon' },
+        mp3  : { dashicon:'dashicons-format-audio',     cls:'kfm-file-icon' },
+        mp4  : { dashicon:'dashicons-video-alt3',       cls:'kfm-file-icon' },
+        txt  : { dashicon:'dashicons-media-text',       cls:'kfm-file-icon' },
+        md   : { dashicon:'dashicons-media-text',       cls:'kfm-file-icon' },
+        csv  : { dashicon:'dashicons-editor-table',     cls:'kfm-file-icon' },
+        _def : { dashicon:'dashicons-media-default',    cls:'kfm-file-icon' },
     };
-
     function iconFor( item ) {
         if ( item.type === 'dir' ) return ICON_MAP.dir;
         return ICON_MAP[ item.ext ] || ICON_MAP._def;
     }
 
     /* ──────────────────────────────────────────────── Utilities ── */
-
     function humanSize( bytes ) {
         if ( ! bytes ) return '\u2013';
-        var units = [ 'B', 'KB', 'MB', 'GB' ], i = 0;
+        var units = ['B','KB','MB','GB'], i = 0;
         while ( bytes >= 1024 && i < units.length - 1 ) { bytes /= 1024; i++; }
         return bytes.toFixed( i ? 1 : 0 ) + '\u00a0' + units[ i ];
     }
-
-    function humanDate( ts ) {
-        return new Date( ts * 1000 ).toLocaleString();
-    }
-
+    function humanDate( ts ) { return new Date( ts * 1000 ).toLocaleString(); }
     function setStatus( msg ) {
         var $s = $( '#kfm-status' );
         $s.text( msg );
-        clearTimeout( $s.data( 'timer' ) );
-        if ( msg ) $s.data( 'timer', setTimeout( function () { $s.text( '' ); }, 4000 ) );
+        clearTimeout( $s.data('timer') );
+        if ( msg ) $s.data( 'timer', setTimeout( function () { $s.text(''); }, 4000 ) );
     }
-
     function errMsg( err ) {
         if ( typeof err === 'string' ) return err;
         if ( err && err.message ) return err.message;
         return KFM.i18n.errorGeneric || 'An error occurred.';
     }
-
     function ajax( action, data, method ) {
-        return $.ajax( {
+        return $.ajax({
             url    : KFM.ajaxUrl,
             method : method || 'POST',
             data   : $.extend( { action: action, nonce: KFM.nonce }, data ),
-        } ).then( function ( r ) {
-            if ( ! r.success ) return $.Deferred().reject(
-                r.data && r.data.message ? r.data.message : ( KFM.i18n.errorGeneric || 'An error occurred.' )
-            );
+        }).then( function (r) {
+            if ( ! r.success ) return $.Deferred().reject( r.data && r.data.message ? r.data.message : (KFM.i18n.errorGeneric||'An error occurred.') );
             return r.data;
         }, function ( xhr, status, err ) {
-            var msg = ( KFM.i18n.errorGeneric || 'An error occurred.' );
-            try {
-                var json = JSON.parse( xhr.responseText );
-                if ( json.data && json.data.message ) msg = json.data.message;
-            } catch(e) {
-                if ( err && typeof err === 'string' ) msg = err;
-            }
+            var msg = KFM.i18n.errorGeneric || 'An error occurred.';
+            try { var j = JSON.parse(xhr.responseText); if (j.data&&j.data.message) msg=j.data.message; } catch(e) { if (err&&typeof err==='string') msg=err; }
             return $.Deferred().reject( msg );
-        } );
+        });
     }
+    function esc( str ) { return $('<div>').text( String(str||'') ).html(); }
 
-    function esc( str ) {
-        return $( '<div>' ).text( String( str || '' ) ).html();
-    }
-
+    /* ───────────────────────── Notifications (replaces UIkit.notification) ── */
     function notify( msg, status, timeout ) {
-        UIkit.notification( {
-            message : msg,
-            status  : status  || 'primary',
-            timeout : timeout !== undefined ? timeout : 3000,
-            pos     : 'top-center',
-        } );
+        var $c = $( '#kfm-notify-container' );
+        if ( ! $c.length ) $c = $( '<div id="kfm-notify-container"></div>' ).appendTo('body');
+        var $n = $( '<div class="kfm-notify kfm-notify-' + (status||'primary') + '">' + msg + '</div>' );
+        var ms = timeout !== undefined ? timeout : 3000;
+        if ( ms === 0 ) {
+            var $x = $( '<button class="kfm-notify-close" type="button">&times;</button>' );
+            $x.on( 'click', function () { $n.remove(); } );
+            $n.append( $x );
+        }
+        $c.append( $n );
+        if ( ms > 0 ) setTimeout( function () {
+            $n.addClass('kfm-notify-out');
+            setTimeout( function () { $n.remove(); }, 320 );
+        }, ms );
     }
 
-    /* ───────────────────────────────────────── Dark / light mode ── */
-
+    /* ────────────────────────────────── Theme ── */
     function initTheme() {
-        try {
-            var saved = localStorage.getItem( 'kfm_theme' );
-            if ( saved === 'dark' ) applyTheme( 'dark' );
-        } catch(e) {}
+        try { if ( localStorage.getItem('kfm_theme') === 'dark' ) applyTheme('dark'); } catch(e) {}
     }
-
     function applyTheme( theme ) {
         if ( theme === 'dark' ) {
-            $( '#kfm-wrap' ).addClass( 'kfm-dark' );
-            $( 'html' ).attr( 'data-kfm-theme', 'dark' );
-            $( '#kfm-theme-icon' ).html( '&#x2600;' );
+            $('#kfm-wrap').addClass('kfm-dark');
+            $('html').attr('data-kfm-theme','dark');
+            $('#kfm-theme-icon').html('&#x2600;');
         } else {
-            $( '#kfm-wrap' ).removeClass( 'kfm-dark' );
-            $( 'html' ).removeAttr( 'data-kfm-theme' );
-            $( '#kfm-theme-icon' ).html( '&#x1F319;' );
+            $('#kfm-wrap').removeClass('kfm-dark');
+            $('html').removeAttr('data-kfm-theme');
+            $('#kfm-theme-icon').html('&#x1F319;');
         }
     }
-
     function toggleTheme() {
-        var next = $( '#kfm-wrap' ).hasClass( 'kfm-dark' ) ? 'light' : 'dark';
+        var next = $('#kfm-wrap').hasClass('kfm-dark') ? 'light' : 'dark';
         applyTheme( next );
-        try { localStorage.setItem( 'kfm_theme', next ); } catch(e) {}
+        try { localStorage.setItem('kfm_theme', next); } catch(e) {}
     }
 
-    /* ────────────────────────────────────────────── Breadcrumbs ── */
-
+    /* ──────────────────────────────────────────── Breadcrumbs ── */
     function renderBreadcrumbs( crumbs ) {
         var $bc = $( '#kfm-breadcrumb' ).empty();
         crumbs.forEach( function ( c, i ) {
             if ( i === crumbs.length - 1 ) {
-                $bc.append( '<li><span>' + esc( c.name ) + '</span></li>' );
+                $bc.append( '<li><span>' + esc(c.name) + '</span></li>' );
             } else {
-                $bc.append( '<li><a href="#" data-rel="' + esc( c.rel ) + '">' + esc( c.name ) + '</a></li>' );
+                $bc.append( '<li><a href="#" data-rel="' + esc(c.rel) + '">' + esc(c.name) + '</a></li>' );
             }
-        } );
+        });
     }
 
-    /* ───────────────────────────────────────────────── File table ── */
-
+    /* ──────────────────────────────────────────────── File table ── */
     function renderTable( items ) {
         var $tbody = $( '#kfm-tbody' ).empty();
         $( '#kfm-empty' ).toggle( items.length === 0 );
         $( '#kfm-table' ).toggle( items.length > 0 );
-        $( '#kfm-check-all' ).prop( 'checked', false );
+        $( '#kfm-check-all' ).prop('checked', false);
         state.selected.clear();
         updateToolbarState();
 
-        var hasBulk = canDo( 'write' ) || canDo( 'rename' ) || canDo( 'chmod' ) || canDo( 'delete' );
+        var hasBulk = canDo('write') || canDo('rename') || canDo('chmod') || canDo('delete');
 
         items.forEach( function ( item ) {
             var ico   = iconFor( item );
             var isDir = item.type === 'dir';
             var isRO  = ! isDir && READONLY_EXTS.indexOf( item.ext ) !== -1;
 
-            // ── Name cell ──
-            // Directories: always a clickable link — navigation relies on kfm_list;
-            //   the server enforces the 'list' permission, no client gate needed.
-            // Files: link when read is permitted (opens editor/viewer); plain text otherwise.
             var nameCell;
             if ( isDir ) {
-                nameCell = '<a href="#" class="kfm-dir-link" data-rel="' + esc( item.rel ) + '">' + esc( item.name ) + '</a>';
-            } else if ( canDo( 'read' ) ) {
-                nameCell = '<a href="#" class="kfm-file-link" data-rel="' + esc( item.rel ) + '">' + esc( item.name ) + '</a>'
+                nameCell = '<a href="#" class="kfm-dir-link" data-rel="' + esc(item.rel) + '">' + esc(item.name) + '</a>';
+            } else if ( canDo('read') ) {
+                nameCell = '<a href="#" class="kfm-file-link" data-rel="' + esc(item.rel) + '">' + esc(item.name) + '</a>'
                          + ( isRO ? ' <span class="kfm-badge-ro" title="Read-only">RO</span>' : '' );
             } else {
-                nameCell = esc( item.name )
-                         + ( isRO ? ' <span class="kfm-badge-ro" title="Read-only">RO</span>' : '' );
+                nameCell = esc(item.name) + ( isRO ? ' <span class="kfm-badge-ro" title="Read-only">RO</span>' : '' );
             }
 
-            // ── Row action buttons ──
-
-            // Download — requires read
-            var downloadBtn = ( ! isDir && canDo( 'read' ) )
-                ? '<a class="kfm-row-btn kfm-btn-download"' +
-                    ' href="' + esc( KFM.ajaxUrl ) + '?action=kfm_download&nonce=' + esc( KFM.nonce ) + '&path=' + encodeURIComponent( item.rel ) + '"' +
-                    ' title="Download" download>' +
-                    '<span uk-icon="icon:download;ratio:0.75"></span>' +
-                  '</a>'
+            var downloadBtn = ( ! isDir && canDo('read') )
+                ? '<a class="kfm-row-btn kfm-btn-download" href="' + esc(KFM.ajaxUrl) + '?action=kfm_download&nonce=' + esc(KFM.nonce) + '&path=' + encodeURIComponent(item.rel) + '" title="Download" download><span class="dashicons dashicons-download"></span></a>'
                 : '';
 
-            // Edit / Preview — requires read; hidden for dirs
-            // Images → preview modal; editable text types → editor; everything else → no edit button (download only)
             var editBtn = '';
-            if ( ! isDir && canDo( 'read' ) ) {
-                if ( isImage( item.rel ) ) {
-                    editBtn = '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="Preview">' +
-                                '<span uk-icon="icon:image;ratio:0.75"></span>' +
-                            '</button>';
-                } else if ( isTextFile( item.rel ) && ! isRO ) {
-                    editBtn = '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="Edit">' +
-                                '<span uk-icon="icon:pencil;ratio:0.75"></span>' +
-                            '</button>';
-                } else if ( isTextFile( item.rel ) && isRO ) {
-                    editBtn = '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc( item.rel ) + '" title="View (read-only)">' +
-                                '<span uk-icon="icon:file-text;ratio:0.75"></span>' +
-                            '</button>';
+            if ( ! isDir && canDo('read') ) {
+                if ( isImage(item.rel) ) {
+                    editBtn = '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc(item.rel) + '" title="Preview"><span class="dashicons dashicons-format-image"></span></button>';
+                } else if ( isTextFile(item.rel) && ! isRO ) {
+                    editBtn = '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc(item.rel) + '" title="Edit"><span class="dashicons dashicons-edit"></span></button>';
+                } else if ( isTextFile(item.rel) && isRO ) {
+                    editBtn = '<button class="kfm-row-btn kfm-btn-edit" data-rel="' + esc(item.rel) + '" title="View (read-only)"><span class="dashicons dashicons-media-text"></span></button>';
                 }
-                // Binary/unknown files: no edit button — download button already handles them
             }
 
-            // Rename — requires rename
-            var renameBtn = canDo( 'rename' )
-                ? '<button class="kfm-row-btn kfm-btn-rename2" data-rel="' + esc( item.rel ) + '" data-name="' + esc( item.name ) + '" title="Rename">' +
-                    '<span uk-icon="icon:tag;ratio:0.75"></span>' +
-                  '</button>'
+            var renameBtn = canDo('rename')
+                ? '<button class="kfm-row-btn kfm-btn-rename2" data-rel="' + esc(item.rel) + '" data-name="' + esc(item.name) + '" title="Rename"><span class="dashicons dashicons-tag"></span></button>'
+                : '';
+            var permBtn = canDo('chmod')
+                ? '<button class="kfm-row-btn kfm-btn-perm" data-rel="' + esc(item.rel) + '" data-perms="' + esc(item.perms) + '" title="Permissions"><span class="dashicons dashicons-lock"></span></button>'
+                : '';
+            var deleteBtn = canDo('delete')
+                ? '<button class="kfm-row-btn kfm-row-btn-del kfm-btn-del" data-rel="' + esc(item.rel) + '" title="Delete"><span class="dashicons dashicons-trash"></span></button>'
                 : '';
 
-            // Chmod — requires chmod
-            var permBtn = canDo( 'chmod' )
-                ? '<button class="kfm-row-btn kfm-btn-perm" data-rel="' + esc( item.rel ) + '" data-perms="' + esc( item.perms ) + '" title="Permissions">' +
-                    '<span uk-icon="icon:lock;ratio:0.75"></span>' +
-                  '</button>'
-                : '';
-
-            // Delete — requires delete
-            var deleteBtn = canDo( 'delete' )
-                ? '<button class="kfm-row-btn kfm-row-btn-del kfm-btn-del" data-rel="' + esc( item.rel ) + '" title="Delete">' +
-                    '<span uk-icon="icon:trash;ratio:0.75"></span>' +
-                  '</button>'
-                : '';
-
-            // Check cell — omit entirely when no bulk actions are available
             var checkCell = hasBulk
-                ? '<td class="kfm-col-check"><input class="uk-checkbox kfm-row-check" type="checkbox" value="' + esc( item.rel ) + '"></td>'
+                ? '<td class="kfm-col-check"><input class="kfm-checkbox kfm-row-check" type="checkbox" value="' + esc(item.rel) + '"></td>'
                 : '';
 
             $tbody.append(
-                '<tr data-rel="' + esc( item.rel ) + '" data-type="' + item.type + '">' +
+                '<tr data-rel="' + esc(item.rel) + '" data-type="' + item.type + '">' +
                     checkCell +
-                    '<td class="kfm-col-icon"><span uk-icon="icon:' + ico.icon + ';ratio:0.9" class="' + ico.cls + '"></span></td>' +
+                    '<td class="kfm-col-icon"><span class="dashicons ' + ico.dashicon + ' ' + ico.cls + '"></span></td>' +
                     '<td class="kfm-col-name">' + nameCell + '</td>' +
-                    '<td class="kfm-col-size">' + ( isDir ? '\u2013' : humanSize( item.size ) ) + '</td>' +
-                    '<td class="kfm-col-perms"><code class="kfm-perms-code">' + esc( item.perms ) + '</code></td>' +
-                    '<td class="kfm-col-mtime">' + humanDate( item.mtime ) + '</td>' +
+                    '<td class="kfm-col-size">' + (isDir ? '\u2013' : humanSize(item.size)) + '</td>' +
+                    '<td class="kfm-col-perms"><code class="kfm-perms-code">' + esc(item.perms) + '</code></td>' +
+                    '<td class="kfm-col-mtime">' + humanDate(item.mtime) + '</td>' +
                     '<td class="kfm-col-actions">' + downloadBtn + editBtn + renameBtn + permBtn + deleteBtn + '</td>' +
                 '</tr>'
             );
-        } );
-
-        UIkit.update( $tbody[0] );
+        });
     }
 
-    /* ────────────────────────────────────────── Directory tree ── */
-
+    /* ───────────────────────────────────────── Directory tree ── */
     function renderTree( rel, $container ) {
         ajax( 'kfm_list', { path: rel } ).then( function ( data ) {
             var dirs = data.items.filter( function (i) { return i.type === 'dir'; } );
             if ( ! dirs.length ) return;
-
             var $ul = $( '<ul class="kfm-tree-list"></ul>' ).appendTo( $container );
             dirs.forEach( function ( d ) {
                 var $li  = $( '<li class="kfm-tree-item"></li>' ).appendTo( $ul );
                 var $row = $( '<div class="kfm-tree-row"></div>' ).appendTo( $li );
                 var $tog = $( '<span class="kfm-tree-toggle"></span>' ).appendTo( $row );
-                $( '<span uk-icon="icon:chevron-right;ratio:0.8"></span>' ).appendTo( $tog );
-                var $a   = $( '<a href="#" class="kfm-tree-link" data-rel="' + esc( d.rel ) + '"></a>' ).appendTo( $row );
-                $( '<span uk-icon="icon:folder;ratio:0.85" class="kfm-tree-icon"></span>' ).appendTo( $a );
-                $( '<span class="kfm-tree-name">' + esc( d.name ) + '</span>' ).appendTo( $a );
+                $( '<span class="dashicons dashicons-arrow-right-alt2"></span>' ).appendTo( $tog );
+                var $a   = $( '<a href="#" class="kfm-tree-link" data-rel="' + esc(d.rel) + '"></a>' ).appendTo( $row );
+                $( '<span class="dashicons dashicons-category kfm-tree-icon"></span>' ).appendTo( $a );
+                $( '<span class="kfm-tree-name">' + esc(d.name) + '</span>' ).appendTo( $a );
                 var $ch  = $( '<div class="kfm-tree-children" style="display:none"></div>' ).appendTo( $li );
-
                 $tog.on( 'click', function () {
-                    if ( ! $li.hasClass( 'kfm-tree-item-open' ) && $ch.is( ':empty' ) ) {
-                        renderTree( d.rel, $ch );
-                    }
+                    if ( ! $li.hasClass('kfm-tree-item-open') && $ch.is(':empty') ) renderTree( d.rel, $ch );
                     $ch.toggle();
-                    $li.toggleClass( 'kfm-tree-item-open' );
-                } );
-            } );
-            UIkit.update( $ul[0] );
-        } );
+                    $li.toggleClass('kfm-tree-item-open');
+                });
+            });
+        });
     }
 
-    /* ────────────────────────────────────────── Load directory ── */
-
+    /* ──────────────────────────────────────── Load directory ── */
     function loadDir( rel ) {
         setStatus( KFM.i18n.loading || 'Loading\u2026' );
         ajax( 'kfm_list', { path: rel } ).then( function ( data ) {
@@ -383,521 +334,361 @@
             state.items       = data.items;
             renderBreadcrumbs( data.breadcrumbs );
             sortAndRender();
-            setStatus( '' );
-            if ( rel === '' && $( '#kfm-tree' ).is( ':empty' ) ) renderTree( '', $( '#kfm-tree' ) );
-        } ).catch( function ( err ) {
+            setStatus('');
+            if ( rel === '' && $('#kfm-tree').is(':empty') ) renderTree( '', $('#kfm-tree') );
+        }).catch( function ( err ) {
             var msg = errMsg( err );
             setStatus( msg );
-            notify( esc( msg ), 'danger', 0 );
-        } );
+            notify( esc(msg), 'danger', 0 );
+        });
     }
 
-    /* ──────────────────────────────────────────────── Sorting ── */
-
+    /* ────────────────────────────────────────────── Sorting ── */
     function sortAndRender() {
         var sorted = state.items.slice().sort( function ( a, b ) {
             if ( a.type !== b.type ) return a.type === 'dir' ? -1 : 1;
-            var va = a[ state.sortCol ], vb = b[ state.sortCol ];
-            if ( typeof va === 'string' ) {
-                var c = va.localeCompare( vb, undefined, { numeric: true } );
-                return state.sortAsc ? c : -c;
-            }
+            var va = a[state.sortCol], vb = b[state.sortCol];
+            if ( typeof va === 'string' ) { var c = va.localeCompare(vb,undefined,{numeric:true}); return state.sortAsc ? c : -c; }
             return state.sortAsc ? va - vb : vb - va;
-        } );
+        });
         renderTable( sorted );
     }
 
     /* ──────────────────────────────────────── Toolbar state ── */
-
     function updateToolbarState() {
-        var hasSel  = state.selected.size > 0;
-        var hasClip = !! state.clipboard;
-        $( '.kfm-needs-sel' ).prop( 'disabled', ! hasSel );
-        $( '#kfm-btn-paste' ).prop( 'disabled', ! hasClip );
+        $( '.kfm-needs-sel' ).prop( 'disabled', ! state.selected.size );
+        $( '#kfm-btn-paste' ).prop( 'disabled', ! state.clipboard );
     }
 
-    /* ─────────────────────────────────── UIKit prompt modal ── */
-
+    /* ──────────────────────────── Prompt modal ── */
     function promptModal( title, label, defaultVal ) {
         return new Promise( function ( resolve, reject ) {
-            var id      = 'kfm-inp-' + Date.now();
-            var settled = false;
-
+            var id = 'kfm-inp-' + Date.now(), settled = false;
             $( '#kfm-modal-title' ).text( title );
             $( '#kfm-modal-body' ).html(
-                '<label class="uk-form-label">' + esc( label ) + '</label>' +
-                '<div class="uk-form-controls uk-margin-small-top">' +
-                    '<input id="' + id + '" class="uk-input" type="text" value="' + esc( defaultVal || '' ) + '">' +
-                '</div>'
+                '<label class="kfm-form-label">' + esc(label) + '</label>' +
+                '<div class="kfm-form-controls"><input id="' + id + '" class="kfm-input" type="text" value="' + esc(defaultVal||'') + '"></div>'
             );
-
-            var modal = UIkit.modal( '#kfm-modal-generic' );
-            modal.show();
-
+            KfmModal.show( '#kfm-modal-generic' );
             setTimeout( function () {
                 var $inp = $( '#' + id ).focus().select();
                 $inp.on( 'keydown', function (e) { if ( e.key === 'Enter' ) { e.preventDefault(); doOk(); } } );
             }, 120 );
-
             function doOk() {
                 var val = $( '#' + id ).val().trim();
                 if ( ! val ) { notify( 'Please enter a name.', 'warning', 2000 ); return; }
-                settled = true;
-                modal.hide();
-                resolve( val );
+                settled = true; KfmModal.hide( '#kfm-modal-generic' ); resolve( val );
             }
-
-            $( '#kfm-modal-ok' ).off( 'click.kfm' ).on( 'click.kfm', doOk );
-
-            UIkit.util.once( document, 'hidden', function () {
-                if ( ! settled ) reject( 'cancelled' );
-            }, { self: false, filter: '#kfm-modal-generic' } );
-        } );
+            $( '#kfm-modal-ok' ).off('click.kfm').on( 'click.kfm', doOk );
+            $( '#kfm-modal-generic' ).one( 'kfm:hidden', function () { if ( ! settled ) reject('cancelled'); } );
+        });
     }
 
     /* ─────────────────────────────────────── Image preview ── */
-
-    var IMAGE_EXTS = [ 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico' ];
-
-    function isImage( rel ) {
-        var ext = ( rel.split( '.' ).pop() || '' ).toLowerCase();
-        return IMAGE_EXTS.indexOf( ext ) !== -1;
-    }
-
+    var IMAGE_EXTS = ['jpg','jpeg','png','gif','svg','webp','bmp','ico'];
+    function isImage( rel ) { return IMAGE_EXTS.indexOf( (rel.split('.').pop()||'').toLowerCase() ) !== -1; }
     function openImagePreview( rel, name ) {
-        var url = KFM.ajaxUrl
-            + '?action=kfm_download&nonce=' + encodeURIComponent( KFM.nonce )
-            + '&path=' + encodeURIComponent( rel )
-            + '&inline=1';
-
-        $( '#kfm-image-preview' ).attr( { src: url, alt: name } );
+        var url = KFM.ajaxUrl + '?action=kfm_download&nonce=' + encodeURIComponent(KFM.nonce) + '&path=' + encodeURIComponent(rel) + '&inline=1';
+        $( '#kfm-image-preview' ).attr({ src:url, alt:name });
         $( '#kfm-image-caption' ).text( name );
-        UIkit.modal( '#kfm-image-modal' ).show();
+        KfmModal.show( '#kfm-image-modal' );
     }
 
-    /* ─────────────────────────────────────── Editable text file types ── */
-
-    var TEXT_EXTS = [
-        'php','phtml','php3','php4','php5','php7',
-        'js','jsx','ts','tsx','mjs','cjs',
-        'css','scss','sass','less',
-        'html','htm','xhtml','shtml',
-        'xml','xsl','xslt',
-        'json','json5','jsonc',
-        'yaml','yml','toml','ini','cfg','conf','config',
-        'sql',
-        'sh','bash','zsh','fish','ksh','csh',
-        'py','rb','pl','lua','go','java','c','cpp','cc','h','hpp','cs','rs','kt','swift',
-        'txt','text','md','markdown','rst','log','nfo',
-        'csv','tsv',
-        'env','htaccess','htpasswd','gitignore','gitattributes','editorconfig',
-        'asp','aspx','jsp','cfm','twig','blade','vue','svelte',
-        'po','pot',
-    ];
-
-    var NO_EXT_TEXT_NAMES = [
-        'dockerfile','makefile','vagrantfile','procfile',
-        'gemfile','rakefile','guardfile','brewfile','podfile',
-    ];
-
+    /* ────────────────────────────────────── Text file types ── */
+    var TEXT_EXTS = ['php','phtml','php3','php4','php5','php7','js','jsx','ts','tsx','mjs','cjs','css','scss','sass','less','html','htm','xhtml','shtml','xml','xsl','xslt','json','json5','jsonc','yaml','yml','toml','ini','cfg','conf','config','sql','sh','bash','zsh','fish','ksh','csh','py','rb','pl','lua','go','java','c','cpp','cc','h','hpp','cs','rs','kt','swift','txt','text','md','markdown','rst','log','nfo','csv','tsv','env','htaccess','htpasswd','gitignore','gitattributes','editorconfig','asp','aspx','jsp','cfm','twig','blade','vue','svelte','po','pot'];
+    var NO_EXT_TEXT_NAMES = ['dockerfile','makefile','vagrantfile','procfile','gemfile','rakefile','guardfile','brewfile','podfile'];
     function isTextFile( rel ) {
-        var base = rel.split( '/' ).pop().toLowerCase();
-        var dot  = base.lastIndexOf( '.' );
-        if ( dot === -1 ) return NO_EXT_TEXT_NAMES.indexOf( base ) !== -1;
-        var ext = base.slice( dot + 1 );
-        return TEXT_EXTS.indexOf( ext ) !== -1;
+        var base = rel.split('/').pop().toLowerCase(), dot = base.lastIndexOf('.');
+        if ( dot === -1 ) return NO_EXT_TEXT_NAMES.indexOf(base) !== -1;
+        return TEXT_EXTS.indexOf( base.slice(dot+1) ) !== -1;
     }
 
-    /* ───────────────────────────────────────── Editor / save ── */
-
+    /* ────────────────────────────────────────── Editor / save ── */
     function saveEditor() {
         if ( ! state.editorCM || ! state.editorRel ) return;
-
         var content = state.editorCM.getValue();
-
-        var ext = ( state.editorRel.split( '.' ).pop() || '' ).toLowerCase();
-        if ( [ 'php', 'js', 'sh' ].indexOf( ext ) !== -1 && DANGEROUS_FN_RE.test( content ) ) {
-            if ( ! window.confirm( ( KFM.i18n && KFM.i18n.warnDangerousFn ) || "This file contains potentially dangerous functions.\n\nSave anyway?" ) ) {
-                return;
-            }
+        var ext = (state.editorRel.split('.').pop()||'').toLowerCase();
+        if ( ['php','js','sh'].indexOf(ext) !== -1 && DANGEROUS_FN_RE.test(content) ) {
+            if ( ! window.confirm( (KFM.i18n&&KFM.i18n.warnDangerousFn)||"This file contains potentially dangerous functions.\n\nSave anyway?" ) ) return;
         }
-
         ajax( 'kfm_write', { path: state.editorRel, content: content } ).then( function () {
-            notify( '<span uk-icon="icon:check;ratio:0.85"></span>&nbsp; ' + ( ( KFM.i18n && KFM.i18n.saved ) ? KFM.i18n.saved : 'File saved.' ), 'success', 3000 );
+            notify( '<span class="dashicons dashicons-yes"></span>&nbsp; ' + ((KFM.i18n&&KFM.i18n.saved)?KFM.i18n.saved:'File saved.'), 'success', 3000 );
             loadDir( state.currentPath );
-        } ).catch( function ( err ) {
-            notify( '<span uk-icon="icon:warning;ratio:0.85"></span>&nbsp; ' + esc( errMsg( err ) ), 'danger', 0 );
-        } );
+        }).catch( function (err) {
+            notify( '<span class="dashicons dashicons-warning"></span>&nbsp; ' + esc(errMsg(err)), 'danger', 0 );
+        });
     }
 
     function openEditor( rel ) {
-        var ext  = ( rel.split( '.' ).pop() || '' ).toLowerCase();
-        var isRO = READONLY_EXTS.indexOf( ext ) !== -1;
-
+        var ext  = (rel.split('.').pop()||'').toLowerCase();
+        var isRO = READONLY_EXTS.indexOf(ext) !== -1;
         state.editorRel = rel;
         ajax( 'kfm_read', { path: rel } ).then( function ( data ) {
-            $( '#kfm-editor-title' ).text( ( isRO ? '[Read-only] ' : 'Editing: ' ) + data.name );
-
-            var modal = UIkit.modal( '#kfm-editor-modal' );
+            $( '#kfm-editor-title' ).text( (isRO?'[Read-only] ':'Editing: ') + data.name );
             if ( state.editorCM ) { try { state.editorCM.toTextArea(); } catch(e) {} state.editorCM = null; }
-
             $( '#kfm-editor-textarea' ).val( data.content );
             $( '#kfm-editor-mode' ).text( data.ext || 'text' );
+            var canSave = canDo('write') && ! isRO;
+            $( '#kfm-editor-save' ).prop('disabled', ! canSave).toggle( canSave );
+            KfmModal.show( '#kfm-editor-modal' );
 
-            // Save button visible only when both write is permitted and file is not read-only
-            var canSave = canDo( 'write' ) && ! isRO;
-            $( '#kfm-editor-save' ).prop( 'disabled', ! canSave ).toggle( canSave );
-
-            modal.show();
-
-            UIkit.util.once( document, 'shown', function () {
+            $( '#kfm-editor-modal' ).one( 'kfm:shown', function () {
                 if ( ! wp.codeEditor || ! wp.codeEditor.initialize ) {
-                    state.editorCM = null;
-                    $( '#kfm-editor-textarea' ).show();
-                    return;
+                    state.editorCM = null; $( '#kfm-editor-textarea' ).show(); return;
                 }
-
-                var mimeMap = {
-                    php:'application/x-httpd-php', js:'text/javascript', json:'application/json',
-                    css:'text/css', html:'text/html', htm:'text/html', xml:'text/xml',
-                    sql:'text/x-sql', sh:'text/x-sh', md:'text/x-markdown',
-                    txt:'text/plain', ts:'text/typescript',
-                };
-                var mode = mimeMap[ data.ext ] || 'text/plain';
+                var mimeMap = { php:'application/x-httpd-php', js:'text/javascript', json:'application/json', css:'text/css', html:'text/html', htm:'text/html', xml:'text/xml', sql:'text/x-sql', sh:'text/x-sh', md:'text/x-markdown', txt:'text/plain', ts:'text/typescript' };
+                var mode = mimeMap[data.ext] || 'text/plain';
                 $( '#kfm-editor-mode' ).text( mode );
-
                 var init = wp.codeEditor.initialize( $( '#kfm-editor-textarea' ), {
                     codemirror: {
-                        mode, lineNumbers:true, lineWrapping:true, indentUnit:4,
-                        tabSize:4, indentWithTabs:false, matchBrackets:true, autoCloseBrackets:true,
-                        readOnly: ! canSave,
-                        extraKeys: { 'Ctrl-S': saveEditor, 'Cmd-S': saveEditor, 'Ctrl-/': 'toggleComment', 'Ctrl-F': 'findPersistent' },
+                        mode, lineNumbers:true, lineWrapping:true, indentUnit:4, tabSize:4,
+                        indentWithTabs:false, matchBrackets:true, autoCloseBrackets:true, readOnly: ! canSave,
+                        extraKeys: { 'Ctrl-S':saveEditor, 'Cmd-S':saveEditor, 'Ctrl-/':'toggleComment', 'Ctrl-F':'findPersistent' },
                     },
-                } );
+                });
                 state.editorCM = init.codemirror;
                 state.editorCM.on( 'cursorActivity', function (cm) {
                     var c = cm.getCursor();
-                    $( '#kfm-editor-cursor' ).text( 'Ln ' + ( c.line + 1 ) + ', Col ' + ( c.ch + 1 ) );
-                } );
+                    $( '#kfm-editor-cursor' ).text( 'Ln '+(c.line+1)+', Col '+(c.ch+1) );
+                });
                 setTimeout( function () { state.editorCM.refresh(); }, 50 );
-            }, { self: false, filter: '#kfm-editor-modal' } );
-
-        } ).catch( function ( err ) {
-            notify( esc( errMsg( err ) ), 'danger', 0 );
-        } );
+            });
+        }).catch( function (err) { notify( esc(errMsg(err)), 'danger', 0 ); });
     }
 
     /* ─────────────────────────────────────────── Permissions ── */
-
     function openChmod( rel, currentOctal ) {
         state.chmodRel = rel;
         $( '#kfm-chmod-path' ).text( rel );
         applyOctalToCheckboxes( currentOctal );
         $( '#kfm-chmod-octal' ).val( currentOctal );
-        UIkit.modal( '#kfm-chmod-modal' ).show();
+        KfmModal.show( '#kfm-chmod-modal' );
     }
-
     function applyOctalToCheckboxes( octal ) {
         var dec = parseInt( octal, 8 );
-        $( '.kfm-perm' ).each( function () {
-            $( this ).prop( 'checked', !! ( dec & parseInt( $( this ).data( 'bit' ) ) ) );
-        } );
+        $( '.kfm-perm' ).each( function () { $( this ).prop('checked', !! (dec & parseInt($( this ).data('bit'))) ); });
     }
-
     function checkboxesToOctal() {
         var val = 0;
-        $( '.kfm-perm:checked' ).each( function () { val += parseInt( $( this ).data( 'bit' ) ); } );
-        return '0' + val.toString( 8 ).padStart( 3, '0' );
+        $( '.kfm-perm:checked' ).each( function () { val += parseInt($( this ).data('bit')); });
+        return '0' + val.toString(8).padStart(3,'0');
     }
 
     /* ─────────────────────────────────────────────── Upload ── */
-
     function uploadFiles( files ) {
         var rejected = validateUploadFiles( files );
         if ( rejected.length ) {
-            notify(
-                '<strong>Upload blocked:</strong><br>' + rejected.map( esc ).join( '<br>' ),
-                'danger', 0
-            );
-            $( '#kfm-file-input' ).val( '' );
-            return;
+            notify( '<strong>Upload blocked:</strong><br>' + rejected.map(esc).join('<br>'), 'danger', 0 );
+            $( '#kfm-file-input' ).val(''); return;
         }
-
-        var dir = state.currentPath;
-        var p   = $.when();
-
+        var dir = state.currentPath, p = $.when();
         Array.from( files ).forEach( function ( file ) {
             p = p.then( function () {
                 var fd = new FormData();
-                fd.append( 'action', 'kfm_upload' );
-                fd.append( 'nonce',  KFM.nonce );
-                fd.append( 'dir',    dir );
-                fd.append( 'file',   file );
-                return $.ajax( { url: KFM.ajaxUrl, method: 'POST', data: fd, processData: false, contentType: false } )
+                fd.append('action','kfm_upload'); fd.append('nonce',KFM.nonce);
+                fd.append('dir',dir); fd.append('file',file);
+                return $.ajax({ url:KFM.ajaxUrl, method:'POST', data:fd, processData:false, contentType:false })
                     .then( function (r) {
-                        if ( r.success ) {
-                            notify( '<span uk-icon="icon:check;ratio:0.85"></span>&nbsp; Uploaded: ' + esc( file.name ), 'success', 2500 );
-                        } else {
-                            notify( esc( r.data && r.data.message ? r.data.message : 'Upload failed: ' + file.name ), 'danger', 0 );
-                        }
-                    } );
-            } );
-        } );
-        p.always( function () { loadDir( state.currentPath ); } );
+                        if (r.success) notify('<span class="dashicons dashicons-yes"></span>&nbsp; Uploaded: '+esc(file.name),'success',2500);
+                        else notify(esc(r.data&&r.data.message?r.data.message:'Upload failed: '+file.name),'danger',0);
+                    });
+            });
+        });
+        p.always( function () { loadDir(state.currentPath); });
     }
 
     /* ───────────────────────────────────────── Panel resize ── */
-
     function initResizer() {
-        var $panel = $( '#kfm-tree-panel' );
         $( '#kfm-resizer' ).on( 'mousedown', function (e) {
             e.preventDefault();
-            var startX = e.clientX, startW = $panel.width();
+            var startX = e.clientX, startW = $( '#kfm-tree-panel' ).width();
             $( document ).on( 'mousemove.kfm', function (e) {
-                $panel.css( 'width', Math.max( 120, Math.min( 500, startW + e.clientX - startX ) ) + 'px' );
-            } ).on( 'mouseup.kfm', function () { $( document ).off( '.kfm' ); } );
-        } );
+                $( '#kfm-tree-panel' ).css( 'width', Math.max(120, Math.min(500, startW + e.clientX - startX)) + 'px' );
+            }).on( 'mouseup.kfm', function () { $( document ).off('.kfm'); });
+        });
     }
 
     /* ─────────────────────────────────────────── Event wiring ── */
-
     function bindEvents() {
-
-        /* ── Navigation ──
-           Directory links are never gated client-side. loadDir fires kfm_list and
-           the server enforces the 'list' permission independently. */
-        $( '#kfm-breadcrumb' ).on( 'click', 'a[data-rel]', function (e) {
-            e.preventDefault(); loadDir( $( this ).data( 'rel' ) );
-        } );
-        $( '#kfm-tbody' ).on( 'click', '.kfm-dir-link', function (e) {
-            e.preventDefault(); loadDir( $( this ).data( 'rel' ) );
-        } );
+        /* Navigation */
+        $( '#kfm-breadcrumb' ).on( 'click', 'a[data-rel]', function (e) { e.preventDefault(); loadDir($( this ).data('rel')); });
+        $( '#kfm-tbody' ).on( 'click', '.kfm-dir-link', function (e) { e.preventDefault(); loadDir($( this ).data('rel')); });
         $( '#kfm-tree' ).on( 'click', '.kfm-tree-link', function (e) {
-            e.preventDefault();
-            loadDir( $( this ).data( 'rel' ) );
-            $( '.kfm-tree-link' ).removeClass( 'kfm-tree-link-active' );
-            $( this ).addClass( 'kfm-tree-link-active' );
-        } );
+            e.preventDefault(); loadDir($( this ).data('rel'));
+            $( '.kfm-tree-link' ).removeClass('kfm-tree-link-active');
+            $( this ).addClass('kfm-tree-link-active');
+        });
 
-        /* ── Selection ── */
+        /* Selection */
         $( '#kfm-tbody' ).on( 'change', '.kfm-row-check', function () {
-            $( this ).is( ':checked' ) ? state.selected.add( $( this ).val() ) : state.selected.delete( $( this ).val() );
+            $( this ).is(':checked') ? state.selected.add($( this ).val()) : state.selected.delete($( this ).val());
             updateToolbarState();
-        } );
+        });
         $( '#kfm-check-all' ).on( 'change', function () {
-            var checked = $( this ).is( ':checked' );
-            state.selected.clear();
-            $( '.kfm-row-check' ).prop( 'checked', checked );
-            if ( checked ) $( '.kfm-row-check' ).each( function () { state.selected.add( $( this ).val() ); } );
+            var checked = $( this ).is(':checked'); state.selected.clear();
+            $( '.kfm-row-check' ).prop('checked', checked);
+            if ( checked ) $( '.kfm-row-check' ).each( function () { state.selected.add($( this ).val()); });
             updateToolbarState();
-        } );
+        });
 
-        /* ── Sorting ── */
+        /* Sorting */
         $( '#kfm-table thead' ).on( 'click', '.kfm-sortable', function () {
-            var col = $( this ).data( 'sort' );
-            if ( state.sortCol === col ) state.sortAsc = ! state.sortAsc;
-            else { state.sortCol = col; state.sortAsc = true; }
-            $( '.kfm-sort-arrow' ).text( '\u25b2' );
-            $( this ).find( '.kfm-sort-arrow' ).text( state.sortAsc ? '\u25b2' : '\u25bc' );
+            var col = $( this ).data('sort');
+            if ( state.sortCol === col ) state.sortAsc = ! state.sortAsc; else { state.sortCol = col; state.sortAsc = true; }
+            $( '.kfm-sort-arrow' ).text('\u25b2');
+            $( this ).find('.kfm-sort-arrow').text( state.sortAsc ? '\u25b2' : '\u25bc' );
             sortAndRender();
-        } );
+        });
 
-        /* ── Refresh / theme ── */
-        $( '#kfm-btn-refresh' ).on( 'click', function () { loadDir( state.currentPath ); } );
+        /* Refresh / theme */
+        $( '#kfm-btn-refresh' ).on( 'click', function () { loadDir(state.currentPath); });
         $( '#kfm-btn-theme' ).on( 'click', toggleTheme );
 
-        /* ── New file / folder ── */
+        /* New file / folder */
         $( '#kfm-btn-new-file' ).on( 'click', function () {
-            promptModal( 'New File', 'File name:' ).then( function (name) {
-                ajax( 'kfm_create_file', { dir: state.currentPath, name: name } ).then( function () {
-                    notify( 'Created: ' + esc( name ), 'success', 2500 );
-                    loadDir( state.currentPath );
-                } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
-            } ).catch( function () {} );
-        } );
+            promptModal('New File','File name:').then( function (name) {
+                ajax('kfm_create_file',{dir:state.currentPath,name:name}).then( function () {
+                    notify('Created: '+esc(name),'success',2500); loadDir(state.currentPath);
+                }).catch( function (err) { notify(esc(errMsg(err)),'danger',0); });
+            }).catch( function () {});
+        });
         $( '#kfm-btn-new-folder' ).on( 'click', function () {
-            promptModal( 'New Folder', 'Folder name:' ).then( function (name) {
-                ajax( 'kfm_create_dir', { dir: state.currentPath, name: name } ).then( function () {
-                    notify( 'Created: ' + esc( name ), 'success', 2500 );
-                    loadDir( state.currentPath );
-                } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
-            } ).catch( function () {} );
-        } );
+            promptModal('New Folder','Folder name:').then( function (name) {
+                ajax('kfm_create_dir',{dir:state.currentPath,name:name}).then( function () {
+                    notify('Created: '+esc(name),'success',2500); loadDir(state.currentPath);
+                }).catch( function (err) { notify(esc(errMsg(err)),'danger',0); });
+            }).catch( function () {});
+        });
 
-        /* ── Upload ── */
-        $( '#kfm-btn-upload' ).on( 'click', function () { $( '#kfm-file-input' ).click(); } );
-        $( '#kfm-file-input' ).on( 'change', function () { if ( this.files.length ) uploadFiles( this.files ); } );
+        /* Upload */
+        $( '#kfm-btn-upload' ).on( 'click', function () { $( '#kfm-file-input' ).click(); });
+        $( '#kfm-file-input' ).on( 'change', function () { if (this.files.length) uploadFiles(this.files); });
 
-        /* ── Drag & drop — only wire when upload is permitted ── */
-        if ( canDo( 'upload' ) ) {
+        /* Drag & drop */
+        if ( canDo('upload') ) {
             var $wrap = $( '#kfm-wrap' );
-            $wrap.on( 'dragover', function (e) { e.preventDefault(); $( '#kfm-dropzone' ).addClass( 'kfm-dropzone-active' ); } );
-            $wrap.on( 'dragleave drop', function (e) { e.preventDefault(); $( '#kfm-dropzone' ).removeClass( 'kfm-dropzone-active' ); } );
-            $wrap.on( 'drop', function (e) {
-                var files = e.originalEvent.dataTransfer.files;
-                if ( files.length ) uploadFiles( files );
-            } );
+            $wrap.on( 'dragover', function (e) { e.preventDefault(); $( '#kfm-dropzone' ).addClass('kfm-dropzone-active'); });
+            $wrap.on( 'dragleave drop', function (e) { e.preventDefault(); $( '#kfm-dropzone' ).removeClass('kfm-dropzone-active'); });
+            $wrap.on( 'drop', function (e) { var f = e.originalEvent.dataTransfer.files; if (f.length) uploadFiles(f); });
         }
 
-        /* ── Editor — file-link and edit-button both open the editor.
-           Note: file links are only rendered when canDo('read') is true (see renderTable),
-           so these handlers fire only for permitted users. ── */
+        /* Editor open */
         $( '#kfm-tbody' ).on( 'click', '.kfm-btn-edit', function () {
-            var rel = $( this ).data( 'rel' );
-            if ( isImage( rel ) ) {
-                openImagePreview( rel, rel.split( '/' ).pop() );
-            } else {
-                openEditor( rel );
-            }
-        } );
-       $( '#kfm-tbody' ).on( 'click', '.kfm-file-link', function (e) {
+            var rel = $( this ).data('rel');
+            if ( isImage(rel) ) openImagePreview(rel, rel.split('/').pop()); else openEditor(rel);
+        });
+        $( '#kfm-tbody' ).on( 'click', '.kfm-file-link', function (e) {
             e.preventDefault();
-            var rel  = $( this ).data( 'rel' );
-            var name = $( this ).text();
-            if ( isImage( rel ) ) {
-                openImagePreview( rel, name );
-            } else if ( isTextFile( rel ) ) {
-                openEditor( rel );
-            } else {
-                // Binary file — trigger download
-                window.location.href = KFM.ajaxUrl
-                    + '?action=kfm_download&nonce=' + encodeURIComponent( KFM.nonce )
-                    + '&path=' + encodeURIComponent( rel );
-            }
-        } );
+            var rel = $( this ).data('rel'), name = $( this ).text();
+            if ( isImage(rel) ) openImagePreview(rel, name);
+            else if ( isTextFile(rel) ) openEditor(rel);
+            else window.location.href = KFM.ajaxUrl+'?action=kfm_download&nonce='+encodeURIComponent(KFM.nonce)+'&path='+encodeURIComponent(rel);
+        });
         $( '#kfm-tbody' ).on( 'dblclick', 'tr[data-type="file"]', function () {
-            if ( ! canDo( 'read' ) ) return;
-            var rel = $( this ).data( 'rel' );
-            if ( isImage( rel ) ) {
-                openImagePreview( rel, rel.split( '/' ).pop() );
-            } else if ( isTextFile( rel ) ) {
-                openEditor( rel );
-            } else {
-                window.location.href = KFM.ajaxUrl
-                    + '?action=kfm_download&nonce=' + encodeURIComponent( KFM.nonce )
-                    + '&path=' + encodeURIComponent( rel );
-            }
-        } );
+            if ( ! canDo('read') ) return;
+            var rel = $( this ).data('rel');
+            if ( isImage(rel) ) openImagePreview(rel, rel.split('/').pop());
+            else if ( isTextFile(rel) ) openEditor(rel);
+            else window.location.href = KFM.ajaxUrl+'?action=kfm_download&nonce='+encodeURIComponent(KFM.nonce)+'&path='+encodeURIComponent(rel);
+        });
         $( '#kfm-editor-save' ).on( 'click', saveEditor );
-
-        UIkit.util.on( '#kfm-editor-modal', 'hidden', function () {
+        $( '#kfm-editor-modal' ).on( 'kfm:hidden', function () {
             if ( state.editorCM ) { try { state.editorCM.toTextArea(); } catch(e) {} state.editorCM = null; }
-        } );
+        });
 
-        /* ── Copy / Cut / Paste ── */
+        /* Copy / Cut / Paste */
         $( '#kfm-btn-copy' ).on( 'click', function () {
             if ( ! state.selected.size ) return;
-            state.clipboard = { paths: Array.from( state.selected ), op: 'copy' };
-            updateToolbarState();
-            setStatus( state.selected.size + ' item(s) copied.' );
-        } );
+            state.clipboard = { paths: Array.from(state.selected), op:'copy' };
+            updateToolbarState(); setStatus(state.selected.size+' item(s) copied.');
+        });
         $( '#kfm-btn-cut' ).on( 'click', function () {
             if ( ! state.selected.size ) return;
-            state.clipboard = { paths: Array.from( state.selected ), op: 'cut' };
-            updateToolbarState();
-            setStatus( state.selected.size + ' item(s) cut.' );
-        } );
+            state.clipboard = { paths: Array.from(state.selected), op:'cut' };
+            updateToolbarState(); setStatus(state.selected.size+' item(s) cut.');
+        });
         $( '#kfm-btn-paste' ).on( 'click', function () {
             if ( ! state.clipboard ) return;
-            var paths  = state.clipboard.paths, op = state.clipboard.op;
-            var action = op === 'copy' ? 'kfm_copy' : 'kfm_move';
-            var p      = $.when();
-            paths.forEach( function (src) { p = p.then( function () { return ajax( action, { path: src, dest: state.currentPath } ); } ); } );
+            var paths = state.clipboard.paths, op = state.clipboard.op;
+            var action = op === 'copy' ? 'kfm_copy' : 'kfm_move', p = $.when();
+            paths.forEach( function (src) { p = p.then( function () { return ajax(action,{path:src,dest:state.currentPath}); }); });
             p.then( function () {
-                if ( op === 'cut' ) state.clipboard = null;
-                updateToolbarState();
-                notify( 'Paste complete.', 'success', 2500 );
-                loadDir( state.currentPath );
-            } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
-        } );
+                if (op==='cut') state.clipboard = null;
+                updateToolbarState(); notify('Paste complete.','success',2500); loadDir(state.currentPath);
+            }).catch( function (err) { notify(esc(errMsg(err)),'danger',0); });
+        });
 
-        /* ── Rename (toolbar) ── */
+        /* Rename toolbar */
         $( '#kfm-btn-rename' ).on( 'click', function () {
-            if ( state.selected.size !== 1 ) { notify( 'Select exactly one item to rename.', 'warning', 2500 ); return; }
-            var rel  = Array.from( state.selected )[0];
-            var name = rel.split( '/' ).pop();
-            promptModal( 'Rename', 'New name:', name ).then( function (newName) {
-                ajax( 'kfm_rename', { path: rel, new_name: newName } ).then( function () {
-                    notify( 'Renamed.', 'success', 2500 );
-                    loadDir( state.currentPath );
-                } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
-            } ).catch( function () {} );
-        } );
+            if ( state.selected.size !== 1 ) { notify('Select exactly one item to rename.','warning',2500); return; }
+            var rel = Array.from(state.selected)[0], name = rel.split('/').pop();
+            promptModal('Rename','New name:',name).then( function (newName) {
+                ajax('kfm_rename',{path:rel,new_name:newName}).then( function () {
+                    notify('Renamed.','success',2500); loadDir(state.currentPath);
+                }).catch( function (err) { notify(esc(errMsg(err)),'danger',0); });
+            }).catch( function () {});
+        });
 
-        /* ── Rename (row button) ── */
+        /* Rename row button */
         $( '#kfm-tbody' ).on( 'click', '.kfm-btn-rename2', function () {
-            var rel = $( this ).data( 'rel' ), name = $( this ).data( 'name' );
-            promptModal( 'Rename', 'New name:', name ).then( function (newName) {
-                ajax( 'kfm_rename', { path: rel, new_name: newName } ).then( function () {
-                    notify( 'Renamed.', 'success', 2500 );
-                    loadDir( state.currentPath );
-                } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
-            } ).catch( function () {} );
-        } );
+            var rel = $( this ).data('rel'), name = $( this ).data('name');
+            promptModal('Rename','New name:',name).then( function (newName) {
+                ajax('kfm_rename',{path:rel,new_name:newName}).then( function () {
+                    notify('Renamed.','success',2500); loadDir(state.currentPath);
+                }).catch( function (err) { notify(esc(errMsg(err)),'danger',0); });
+            }).catch( function () {});
+        });
 
-        /* ── Delete ── */
+        /* Delete */
         function doDelete( paths ) {
             if ( ! paths.length ) return;
-            if ( ! window.confirm( KFM.i18n.confirmDelete || 'Delete selected item(s)?' ) ) return;
+            if ( ! window.confirm(KFM.i18n.confirmDelete||'Delete selected item(s)?') ) return;
             var p = $.when();
-            paths.forEach( function (rel) { p = p.then( function () { return ajax( 'kfm_delete', { path: rel } ); } ); } );
-            p.then( function () {
-                notify( 'Deleted.', 'success', 2500 );
-                loadDir( state.currentPath );
-            } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
+            paths.forEach( function (rel) { p = p.then( function () { return ajax('kfm_delete',{path:rel}); }); });
+            p.then( function () { notify('Deleted.','success',2500); loadDir(state.currentPath); })
+             .catch( function (err) { notify(esc(errMsg(err)),'danger',0); });
         }
-        $( '#kfm-btn-delete' ).on( 'click', function () { doDelete( Array.from( state.selected ) ); } );
-        $( '#kfm-tbody' ).on( 'click', '.kfm-btn-del', function () { doDelete( [ $( this ).data( 'rel' ) ] ); } );
+        $( '#kfm-btn-delete' ).on( 'click', function () { doDelete(Array.from(state.selected)); });
+        $( '#kfm-tbody' ).on( 'click', '.kfm-btn-del', function () { doDelete([$( this ).data('rel')]); });
 
-        /* ── Permissions (toolbar) ── */
+        /* Permissions toolbar */
         $( '#kfm-btn-chmod' ).on( 'click', function () {
-            if ( state.selected.size !== 1 ) { notify( 'Select exactly one item.', 'warning', 2500 ); return; }
-            var rel  = Array.from( state.selected )[0];
-            var item = state.items.find( function (i) { return i.rel === rel; } );
-            openChmod( rel, item ? item.perms : '0644' );
-        } );
+            if ( state.selected.size !== 1 ) { notify('Select exactly one item.','warning',2500); return; }
+            var rel = Array.from(state.selected)[0];
+            var item = state.items.find( function (i) { return i.rel === rel; });
+            openChmod(rel, item ? item.perms : '0644');
+        });
 
-        /* ── Permissions (row button) ── */
+        /* Permissions row button */
         $( '#kfm-tbody' ).on( 'click', '.kfm-btn-perm', function () {
-            openChmod( $( this ).data( 'rel' ), $( this ).data( 'perms' ) );
-        } );
+            openChmod($( this ).data('rel'), $( this ).data('perms'));
+        });
 
-        /* ── chmod modal ── */
-        $( '#kfm-chmod-modal' ).on( 'change', '.kfm-perm', function () {
-            $( '#kfm-chmod-octal' ).val( checkboxesToOctal() );
-        } );
+        /* chmod modal */
+        $( '#kfm-chmod-modal' ).on( 'change', '.kfm-perm', function () { $( '#kfm-chmod-octal' ).val(checkboxesToOctal()); });
         $( '#kfm-chmod-octal' ).on( 'input', function () {
-            var v = $( this ).val();
-            if ( /^[0-7]{3,4}$/.test( v ) ) applyOctalToCheckboxes( v );
-        } );
+            var v = $( this ).val(); if (/^[0-7]{3,4}$/.test(v)) applyOctalToCheckboxes(v);
+        });
         $( '#kfm-chmod-apply' ).on( 'click', function () {
             var mode = $( '#kfm-chmod-octal' ).val();
-
-            if ( CHMOD_FLOOR > 0 && parseInt( mode, 8 ) < CHMOD_FLOOR ) {
-                notify( 'Permissions cannot be set below the minimum floor (' + KFM.chmodFloor + ').', 'warning', 0 );
-                return;
+            if ( CHMOD_FLOOR > 0 && parseInt(mode,8) < CHMOD_FLOOR ) {
+                notify('Permissions cannot be set below the minimum floor ('+KFM.chmodFloor+').','warning',0); return;
             }
-            if ( parseInt( mode, 8 ) & 0o002 ) {
-                notify( 'World-writable permissions are not allowed.', 'danger', 0 );
-                return;
-            }
-
-            ajax( 'kfm_chmod', { path: state.chmodRel, mode: mode } ).then( function () {
-                UIkit.modal( '#kfm-chmod-modal' ).hide();
-                notify( 'Permissions updated.', 'success', 2500 );
-                loadDir( state.currentPath );
-            } ).catch( function (err) { notify( esc( errMsg( err ) ), 'danger', 0 ); } );
-        } );
+            if ( parseInt(mode,8) & 0o002 ) { notify('World-writable permissions are not allowed.','danger',0); return; }
+            ajax('kfm_chmod',{path:state.chmodRel,mode:mode}).then( function () {
+                KfmModal.hide('#kfm-chmod-modal'); notify('Permissions updated.','success',2500); loadDir(state.currentPath);
+            }).catch( function (err) { notify(esc(errMsg(err)),'danger',0); });
+        });
     }
 
     /* ────────────────────────────────────────────── Bootstrap ── */
-
     $( function () {
+        KfmModal.init();
         initTheme();
         applyOpVisibility();
         bindEvents();
         initResizer();
-        loadDir( '' );
-    } );
+        loadDir('');
+    });
 
-}( jQuery, window.KFM || {}, window.UIkit ) );
+}( jQuery, window.KFM || {} ) );

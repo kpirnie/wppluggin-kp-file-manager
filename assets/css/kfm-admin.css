@@ -1,5 +1,4 @@
-/* KFM admin pages – minimal overrides on top of UIKit + WP core */
-
+/* KFM admin pages – minimal overrides on top of WP core */
 .kfm-perms-table { border-collapse: collapse; }
 .kfm-perms-table tbody tr:hover { background: #f0f6ff !important; }
 .kfm-perms-table td, .kfm-perms-table th { border: 1px solid #e2e8f0; }

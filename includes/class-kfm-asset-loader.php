@@ -16,7 +16,7 @@ defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
 if( !class_exists('KFM_Asset_Loader') ) {
 
     /**
-     * Handles all asset enqueueing for KFM — UIKit, CodeMirror, kfm-app.js,
+     * Handles all asset enqueueing for KFM — Dashicons, CodeMirror, kfm-app.js,
      * admin styles, and JS localisation data.
      *
      * @package KP - File Manager
@@ -27,8 +27,10 @@ if( !class_exists('KFM_Asset_Loader') ) {
     class KFM_Asset_Loader {
 
         /**
-         * enqueues the UIkit assets.
-         * This method enqueues the UIkit CSS and JavaScript files from a CDN.
+         * Ensures Dashicons are available for the current page.
+         * Previously loaded UIKit from a CDN; now a no-op for scripts since
+         * Dashicons are already available in WP admin and enqueued here for
+         * front-end (shortcode / block) contexts.
          *
          * @package KP - File Manager
          * @since 1.0.0
@@ -38,14 +40,13 @@ if( !class_exists('KFM_Asset_Loader') ) {
          *
          */
         public function enqueue_uikit(): void {
-            wp_enqueue_style(  'uikit',       'https://cdn.jsdelivr.net/npm/uikit@latest/dist/css/uikit.min.css', [], null, false );
-            wp_enqueue_script( 'uikit',       'https://cdn.jsdelivr.net/npm/uikit@latest/dist/js/uikit.min.js',   [], null, true  );
-            wp_enqueue_script( 'uikit-icons', 'https://cdn.jsdelivr.net/npm/uikit@latest/dist/js/uikit-icons.min.js', [ 'uikit' ], null, true );
+            // UIKit removed — enqueue Dashicons so icons work on the frontend too.
+            wp_enqueue_style( 'dashicons' );
         }
 
         /**
-         * enqueues CodeMirror, the KFM stylesheet, and kfm-app.js with its
-         * localised data object. 
+         * Enqueues CodeMirror, the KFM stylesheet, and kfm-app.js with its
+         * localised data object.
          *
          * @package KP - File Manager
          * @since 1.0.0
@@ -56,24 +57,27 @@ if( !class_exists('KFM_Asset_Loader') ) {
          */
         public function enqueue_file_manager(): void {
 
-            // enqueue CodeMirror with a basic mode to get the editor assets loaded.
+            // Dashicons required on any context (admin already loads them; front-end needs explicit enqueue)
+            wp_enqueue_style( 'dashicons' );
+
+            // Enqueue CodeMirror with a basic mode to get the editor assets loaded.
             $cm = wp_enqueue_code_editor( [ 'type' => 'text/plain' ] );
             wp_enqueue_style(  'wp-codemirror' );
             wp_enqueue_script( 'wp-codemirror' );
 
-            // enqueue KFM's custom stylesheet
+            // Enqueue KFM's custom stylesheet
             wp_enqueue_style(
                 'kfm-style',
                 KFM_PLUGIN_URL . 'assets/css/kfm-style.css',
-                [ 'uikit', 'wp-codemirror' ],
+                [ 'dashicons', 'wp-codemirror' ],
                 KFM_VERSION
             );
 
-            // enqueue the main KFM app script
+            // Enqueue the main KFM app script (jQuery is the only runtime dependency now)
             wp_enqueue_script(
                 'kfm-app',
                 KFM_PLUGIN_URL . 'assets/js/kfm-app.js',
-                [ 'jquery', 'uikit', 'uikit-icons', 'wp-codemirror' ],
+                [ 'jquery', 'wp-codemirror' ],
                 KFM_VERSION,
                 true
             );
@@ -96,15 +100,11 @@ if( !class_exists('KFM_Asset_Loader') ) {
          *
          */
         public function enqueue_admin_styles(): void {
-            wp_enqueue_style( 'kfm-admin', KFM_PLUGIN_URL . 'assets/css/kfm-admin.css', [ 'uikit' ], KFM_VERSION );
+            wp_enqueue_style( 'kfm-admin', KFM_PLUGIN_URL . 'assets/css/kfm-admin.css', [], KFM_VERSION );
         }
 
         /**
          * Localizes the data for the JavaScript.
-         * This method prepares an array of data to be passed to the JavaScript code,
-         * including the AJAX URL, nonce, base path, blocked and readonly extensions,
-         * chmod floor, allowed operations for the current user,
-         * and internationalized strings for various messages.
          *
          * @package KP - File Manager
          * @since 1.0.0
@@ -115,7 +115,6 @@ if( !class_exists('KFM_Asset_Loader') ) {
          */
         private function kfm_localize_data(): array {
 
-            // return the data array to be passed to JS via wp_localize_script
             return [
                 'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
                 'nonce'        => wp_create_nonce( 'kfm_nonce' ),
@@ -123,7 +122,6 @@ if( !class_exists('KFM_Asset_Loader') ) {
                 'blockedExts'  => KFM_Settings::get_blocked_exts(),
                 'readonlyExts' => KFM_Settings::get_readonly_exts(),
                 'chmodFloor'   => KFM_Settings::get_chmod_floor(),
-                // Pass current user's allowed ops so JS can hide/disable buttons
                 'allowedOps'   => $this->current_user_allowed_ops(),
                 'i18n'         => [
                     'confirmDelete'    => __( 'Delete selected item(s)? This cannot be undone.', 'kpfm' ),
@@ -137,9 +135,7 @@ if( !class_exists('KFM_Asset_Loader') ) {
         }
 
         /**
-         * Returns array of op slugs the current user is allowed to perform
-         * This method checks the current user's permissions against the defined
-         * operations in KFM_Permissions and returns an array of allowed operation slugs.
+         * Returns array of op slugs the current user is allowed to perform.
          *
          * @package KP - File Manager
          * @since 1.0.0
@@ -150,13 +146,10 @@ if( !class_exists('KFM_Asset_Loader') ) {
          */
         private function current_user_allowed_ops(): array {
 
-            // hold the allowed ops for the current user
             $allowed = [];
 
-            // Loop through all defined ops and check if the user has permission for each
             foreach ( array_keys( KFM_Permissions::OPS ) as $op ) {
 
-                // Map op back to a representative action for the check
                 $action_map = [
                     'list'   => 'kfm_list',
                     'read'   => 'kfm_read',
@@ -167,13 +160,11 @@ if( !class_exists('KFM_Asset_Loader') ) {
                     'chmod'  => 'kfm_chmod',
                 ];
 
-                // Check if the user has permission for this op and add to allowed array if so
                 if ( KFM_Permissions::current_user_can_op( $action_map[ $op ] ) ) {
                     $allowed[] = $op;
                 }
             }
 
-            // Return the array of allowed ops for the current user
             return $allowed;
         }
     }
