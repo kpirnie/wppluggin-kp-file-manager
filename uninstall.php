@@ -13,7 +13,7 @@
 // Only run if WordPress is uninstalling the plugin — never directly.
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
-// ── Single-site option keys ───────────────────────────────────────────────────
+// Options to delete on uninstall
 $options = [
     'kfm_base_path',
     'kfm_blocked_exts',
@@ -29,18 +29,22 @@ $options = [
     'kfm_site_disabled',
 ];
 
-// ── Network / multisite ───────────────────────────────────────────────────────
+// Site options to delete on uninstall (multisite)
 $site_options = [
     'kfm_disabled_sites',
 ];
 
+// if this is a multisite
 if ( is_multisite() ) {
 
     // Clean up every site in the network
     $sites = get_sites( [ 'number' => 0, 'fields' => 'ids' ] );
+
+    // loop over the sites and delete the options for each one
     foreach ( $sites as $blog_id ) {
         switch_to_blog( $blog_id );
 
+        // loop each option and delete it for this site
         foreach ( $options as $key ) {
             delete_option( $key );
         }
@@ -61,6 +65,7 @@ if ( is_multisite() ) {
         delete_site_option( $key );
     }
 
+    // otherwise, single site cleanup
 } else {
 
     // Single site cleanup

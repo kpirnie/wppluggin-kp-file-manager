@@ -21,6 +21,7 @@ define( 'KFM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
 // autoload classes in the includes directory with a KFM_ prefix
 spl_autoload_register( function ( string $class_name ): void {
+
     // Only autoload classes that start with KFM_
     if ( strpos( $class_name, 'KFM_' ) !== 0 ) return;
     $file = KFM_PLUGIN_DIR . 'includes/class-'
@@ -33,20 +34,26 @@ spl_autoload_register( function ( string $class_name ): void {
 
 // Initialize the plugin.
 add_action( 'plugins_loaded', function() {
+
+    // In multisite, if the plugin is network-activated, check if the current site is disabled before initializing
     if ( is_multisite()
         && is_plugin_active_for_network( plugin_basename( __FILE__ ) )
         && ! is_network_admin()
     ) {
+
         // For AJAX requests originating from the network admin, skip the site check
         $referer = wp_get_referer();
         $is_network_ajax = wp_doing_ajax() && $referer
             && strpos( $referer, network_admin_url() ) === 0;
 
+        // If not an AJAX request from the network admin, check if the current site is in the disabled list
         if ( ! $is_network_ajax ) {
             $disabled = get_site_option( 'kfm_disabled_sites', [] );
             if ( in_array( (int) get_current_blog_id(), (array) $disabled, true ) ) return;
         }
     }
+
+    // Initialize the plugin.
     KFM_Plugin::init();
 } );
 
