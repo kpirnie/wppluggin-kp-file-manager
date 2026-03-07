@@ -51,12 +51,14 @@ sort( $all_actions );
  * @param array $extra Extra query parameters.
  * @return string The generated URL.
  */
-function kfm_audit_url( array $extra = [] ): string {
-    return admin_url( 'admin.php?' . http_build_query( array_merge(
-        [ 'page' => 'kfm-audit' ],
-        $extra
-    ) ) );
-}
+if ( ! function_exists( 'kfm_audit_url' ) ) :
+    function kfm_audit_url( array $extra = [] ): string {
+        return admin_url( 'admin.php?' . http_build_query( array_merge(
+            [ 'page' => 'kfm-audit' ],
+            $extra
+        ) ) );
+    }
+endif;
 ?>
 <div class="wrap">
     <h1 style="display:flex;align-items:center;gap:12px">

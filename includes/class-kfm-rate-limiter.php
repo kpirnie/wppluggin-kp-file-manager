@@ -47,33 +47,27 @@ if( !class_exists('KFM_Rate_Limiter') ) {
          * @return true|WP_Error
          */
         public static function check( string $action ): true|WP_Error {
+            if ( ! in_array( $action, self::WRITE_ACTIONS, true ) ) return true;
 
-            // Only apply rate limiting to defined write actions
-            if ( ! in_array( $action, self::WRITE_ACTIONS, true ) ) {
+            $key       = self::key();
+            $count_key = $key . '_count';
+            $start_key = $key . '_start';
+
+            $start = get_transient( $start_key );
+            if ( $start === false ) {
+                set_transient( $start_key, time(), self::WINDOW_SECS );
+                set_transient( $count_key, 1,      self::WINDOW_SECS );
                 return true;
             }
 
-            // Get the unique key for the current user or IP address
-            $key   = self::key();
-            $count = (int) get_transient( $key );
-
-            // If the count exceeds the maximum allowed operations, block the action and log it
+            $count = (int) get_transient( $count_key );
             if ( $count >= self::MAX_WRITE_OPS ) {
                 KFM_Audit_Log::write( $action, '', 'blocked - rate limit exceeded' );
-                return new WP_Error(
-                    'kfm_rate_limit',
-                    __( 'Too many operations. Please wait a moment and try again.', 'kpfm' )
-                );
+                return new WP_Error( 'kfm_rate_limit', __( 'Too many operations. Please wait a moment and try again.', 'kpfm' ) );
             }
 
-            // Increment or create counter and set it to expire after the defined time window
-            if ( $count === 0 ) {
-                set_transient( $key, 1, self::WINDOW_SECS );
-            } else {
-                set_transient( $key, $count + 1, self::WINDOW_SECS );
-            }
-
-            // default to allowing the action if we haven't hit the limit
+            $remaining = self::WINDOW_SECS - ( time() - (int) $start );
+            set_transient( $count_key, $count + 1, max( 1, $remaining ) );
             return true;
         }
 

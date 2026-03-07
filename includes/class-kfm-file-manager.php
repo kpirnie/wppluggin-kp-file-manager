@@ -90,7 +90,8 @@ if( !class_exists('KFM_File_Manager') ) {
             if ( $real === false ) return false;
 
             // Strict sandbox check — must start with the base path
-            if ( strpos( $real, $this->base_path ) !== 0 ) return false;
+            $base = rtrim( $this->base_path, DIRECTORY_SEPARATOR );
+            if ( $real !== $base && strpos( $real, $base . DIRECTORY_SEPARATOR ) !== 0 ) return false;
 
             // return the resolved absolute path
             return $real;
@@ -108,7 +109,8 @@ if( !class_exists('KFM_File_Manager') ) {
          *
          */
         public function relative( string $abs ): string {
-            return ltrim( str_replace( $this->base_path, '', $abs ), DIRECTORY_SEPARATOR );
+            $base = rtrim( $this->base_path, DIRECTORY_SEPARATOR );
+            return ltrim( substr( $abs, strlen( $base ) ), DIRECTORY_SEPARATOR );
         }
 
         /**
@@ -386,6 +388,14 @@ if( !class_exists('KFM_File_Manager') ) {
             if ( ! $path ) return new WP_Error( 'kfm_bad_path', __( 'Invalid path.', 'kpfm' ) );
             if ( file_exists( $path ) ) return new WP_Error( 'kfm_exists', __( 'File already exists.', 'kpfm' ) );
 
+            // check the blocked extensions
+            $ext = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+            if ( $ext !== '' && in_array( $ext, KFM_Settings::get_blocked_exts(), true ) ) {
+                return new WP_Error( 'kfm_blocked_ext',
+                    sprintf( __( 'Cannot create .%s files — file type is blocked.', 'kpfm' ), $ext )
+                );
+            }
+
             // WP.org note: WP_Filesystem equivalent is $wp_filesystem->put_contents() with empty string.
             // Not used here — see class-level docblock for explanation.
             if ( file_put_contents( $path, '' ) === false ) {
@@ -536,6 +546,14 @@ if( !class_exists('KFM_File_Manager') ) {
                 return new WP_Error( 'kfm_bad_name', __( 'Invalid name.', 'kpfm' ) );
             }
 
+            // block bad extenstions
+            $new_ext = strtolower( pathinfo( $new_name, PATHINFO_EXTENSION ) );
+            if ( $new_ext !== '' && in_array( $new_ext, KFM_Settings::get_blocked_exts(), true ) ) {
+                return new WP_Error( 'kfm_blocked_ext',
+                    sprintf( __( 'Cannot rename to .%s — file type is blocked.', 'kpfm' ), $new_ext )
+                );
+            }
+
             // Check if the new name is the same as the old name (case-insensitive) and skip if so
             $dest = dirname( $path ) . DIRECTORY_SEPARATOR . $new_name;
             if ( file_exists( $dest ) ) {
@@ -574,8 +592,16 @@ if( !class_exists('KFM_File_Manager') ) {
             if ( ! $src || ! file_exists( $src ) ) return new WP_Error( 'kfm_not_found', __( 'Source not found.', 'kpfm' ) );
             if ( ! $dest ) return new WP_Error( 'kfm_bad_path', __( 'Invalid destination.', 'kpfm' ) );
 
-            // If destination is a directory, place the item inside it
+            // If destination is a directory set the proper directory
             if ( is_dir( $dest ) ) $dest = $dest . DIRECTORY_SEPARATOR . basename( $src );
+
+            // one last extension check... just in case....
+            $dest_ext = strtolower( pathinfo( basename( $dest ), PATHINFO_EXTENSION ) );
+            if ( $dest_ext !== '' && in_array( $dest_ext, KFM_Settings::get_blocked_exts(), true ) ) {
+                return new WP_Error( 'kfm_blocked_ext',
+                    sprintf( __( 'Cannot copy to .%s — file type is blocked.', 'kpfm' ), $dest_ext )
+                );
+            }
 
             // check if the source exists and copy the directory
             if ( is_dir( $src ) ) return $this->copy_dir( $src, $dest );

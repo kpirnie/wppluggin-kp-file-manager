@@ -394,19 +394,22 @@ if( !class_exists('KFM_Ajax') ) {
 
             $filename = basename( $path );
             $size     = filesize( $path );
-            $mime     = function_exists( 'finfo_open' )
-                ? finfo_file( finfo_open( FILEINFO_MIME_TYPE ), $path )
-                : 'application/octet-stream';
+            if ( function_exists( 'finfo_open' ) ) {
+                $finfo = finfo_open( FILEINFO_MIME_TYPE );
+                $mime  = finfo_file( $finfo, $path );
+                finfo_close( $finfo );
+            } else {
+                $mime = 'application/octet-stream';
+            }
 
-            $inline = isset( $_GET['inline'] ) && $_GET['inline'] === '1';
-
-            // Log the action
-            KFM_Audit_Log::write( 'kfm_download', $rel, 'ok' );
+            // force specific mime types to be inline ONLY
+            $safe_inline_mimes = [ 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/x-icon' ];
+            $inline = isset( $_GET['inline'] ) && $_GET['inline'] === '1'
+                    && in_array( $mime, $safe_inline_mimes, true );
 
             // Read via file manager
-            $data = $this->fm->read_file( $rel );
-            if ( is_wp_error( $data ) ) {
-                wp_send_json_error( [ 'message' => $data->get_error_message() ], 500 );
+            if ( ! is_readable( $path ) ) {
+                wp_send_json_error( [ 'message' => __( 'File is not readable.', 'kpfm' ) ], 403 );
             }
 
             nocache_headers();
@@ -414,13 +417,15 @@ if( !class_exists('KFM_Ajax') ) {
             header( 'Content-Disposition: ' . ( $inline ? 'inline' : 'attachment' ) . '; filename="' . $filename . '"' );
             header( 'Content-Length: ' . $size );
             header( 'X-Content-Type-Options: nosniff' );
+            header( 'X-Frame-Options: DENY' );
 
-            while ( ob_get_level() ) {
-                ob_end_clean();
-            }
+            // end the output cleanly
+            while ( ob_get_level() ) ob_end_clean();
 
-            echo $data['content']; // phpcs:ignore WordPress.Security.EscapeOutput
+            KFM_Audit_Log::write( 'kfm_download', $rel, 'ok' );
+            readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions
             exit;
+            
         }
 
         /**
