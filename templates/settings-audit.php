@@ -17,9 +17,9 @@ $all_entries = KFM_Audit_Log::get( );
 $total       = count( $all_entries );
 
 // setup the filters to be used in the filter form and for filtering the entries
-$filter_user   = sanitize_text_field( $_GET['kfm_user']   ?? '' );
-$filter_action = sanitize_key(        $_GET['kfm_action'] ?? '' );
-$filter_result = sanitize_key(        $_GET['kfm_result'] ?? '' );
+$filter_user   = sanitize_text_field( wp_unslash( $_GET['kfm_user'] ) ?? '' );
+$filter_action = sanitize_key( $_GET['kfm_action'] ?? '' );
+$filter_result = sanitize_key( $_GET['kfm_result'] ?? '' );
 
 // apply the filters to the entries
 if ( $filter_user   ) $all_entries = array_values( array_filter( $all_entries, fn( $e ) => stripos( $e['user'], $filter_user ) !== false ) );
@@ -31,7 +31,7 @@ if ( $filter_result ) {
 
 // calculate pagination values based on the filtered entries
 $filtered_total = count( $all_entries );
-$page_num       = max( 1, (int) ( $_GET['paged'] ?? 1 ) );
+$page_num       = max( 1, (int) ( wp_unslash( $_GET['paged'] ) ?? 1 ) );
 $offset         = ( $page_num - 1 ) * $per_page;
 $page_entries   = array_slice( $all_entries, $offset, $per_page );
 $total_pages    = max( 1, (int) ceil( $filtered_total / $per_page ) );
@@ -62,9 +62,9 @@ endif;
 ?>
 <div class="wrap">
     <h1 style="display:flex;align-items:center;gap:12px">
-        <?php esc_html_e( 'Audit Log', 'kpfm' ); ?>
+        <?php esc_html_e( 'Audit Log', 'kp-file-manager' ); ?>
         <span style="font-size:13px;font-weight:normal;color:#666">
-            <?php printf( esc_html__( '%d total entries', 'kpfm' ), $total ); ?>
+            <?php printf( esc_html__( '%d total entries', 'kp-file-manager' ), $total ); ?>
         </span>
     </h1>
 
@@ -77,12 +77,12 @@ endif;
             <input type="hidden" name="page" value="kfm-audit">
 
             <input type="text" name="kfm_user" class="regular-text"
-                   placeholder="<?php esc_attr_e( 'Filter by user…', 'kpfm' ); ?>"
+                   placeholder="<?php esc_attr_e( 'Filter by user…', 'kp-file-manager' ); ?>"
                    value="<?php echo esc_attr( $filter_user ); ?>"
                    style="max-width:180px">
 
             <select name="kfm_action">
-                <option value=""><?php esc_html_e( 'All actions', 'kpfm' ); ?></option>
+                <option value=""><?php esc_html_e( 'All actions', 'kp-file-manager' ); ?></option>
                 <?php foreach ( $all_actions as $a ) : ?>
                 <option value="<?php echo esc_attr( $a ); ?>" <?php selected( $filter_action, $a ); ?>>
                     <?php echo esc_html( str_replace( 'kfm_', '', $a ) ); ?>
@@ -91,16 +91,16 @@ endif;
             </select>
 
             <select name="kfm_result">
-                <option value=""><?php esc_html_e( 'All results', 'kpfm' ); ?></option>
-                <option value="ok"    <?php selected( $filter_result, 'ok' ); ?>><?php esc_html_e( 'OK only', 'kpfm' ); ?></option>
-                <option value="error" <?php selected( $filter_result, 'error' ); ?>><?php esc_html_e( 'Errors / blocked', 'kpfm' ); ?></option>
+                <option value=""><?php esc_html_e( 'All results', 'kp-file-manager' ); ?></option>
+                <option value="ok"    <?php selected( $filter_result, 'ok' ); ?>><?php esc_html_e( 'OK only', 'kp-file-manager' ); ?></option>
+                <option value="error" <?php selected( $filter_result, 'error' ); ?>><?php esc_html_e( 'Errors / blocked', 'kp-file-manager' ); ?></option>
             </select>
 
-            <?php submit_button( __( 'Filter', 'kpfm' ), 'secondary', '', false, [ 'style' => 'height:30px;padding:0 10px' ] ); ?>
+            <?php submit_button( __( 'Filter', 'kp-file-manager' ), 'secondary', '', false, [ 'style' => 'height:30px;padding:0 10px' ] ); ?>
 
             <?php if ( $filter_user || $filter_action || $filter_result ) : ?>
             <a href="<?php echo esc_url( kfm_audit_url() ); ?>" class="button button-secondary" style="height:30px;line-height:30px;padding:0 10px">
-                <?php esc_html_e( 'Clear', 'kpfm' ); ?>
+                <?php esc_html_e( 'Clear', 'kp-file-manager' ); ?>
             </a>
             <?php endif; ?>
         </form>
@@ -110,8 +110,8 @@ endif;
             <?php wp_nonce_field( 'kfm_clear_log' ); ?>
             <button type="submit" name="kfm_clear_log" value="1" class="button button-secondary"
                     style="color:#a00;border-color:#a00"
-                    onclick="return confirm( '<?php echo esc_js( __( 'Permanently clear all log entries?', 'kpfm' ) ); ?>' )">
-                <?php esc_html_e( 'Clear Entire Log', 'kpfm' ); ?>
+                    onclick="return confirm( '<?php echo esc_js( __( 'Permanently clear all log entries?', 'kp-file-manager' ) ); ?>' )">
+                <?php esc_html_e( 'Clear Entire Log', 'kp-file-manager' ); ?>
             </button>
         </form>
         <?php endif; ?>
@@ -119,7 +119,7 @@ endif;
     </div>
 
     <?php if ( empty( $page_entries ) ) : ?>
-    <p><?php esc_html_e( 'No log entries found.', 'kpfm' ); ?></p>
+    <p><?php esc_html_e( 'No log entries found.', 'kp-file-manager' ); ?></p>
 
     <?php else : ?>
 
@@ -127,7 +127,7 @@ endif;
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <span style="font-size:13px;color:#666">
             <?php printf(
-                esc_html__( 'Showing %d-%d of %d', 'kpfm' ),
+                esc_html__( 'Showing %d-%d of %d', 'kp-file-manager' ),
                 $offset + 1,
                 min( $offset + $per_page, $filtered_total ),
                 $filtered_total
@@ -137,13 +137,13 @@ endif;
         <?php if ( $total_pages > 1 ) : ?>
         <div style="display:flex;gap:4px">
             <?php if ( $page_num > 1 ) : ?>
-            <a class="button button-small" href="<?php echo esc_url( kfm_audit_url( array_filter( [ 'paged' => $page_num - 1, 'kfm_user' => $filter_user, 'kfm_action' => $filter_action, 'kfm_result' => $filter_result ] ) ) ); ?>">&#8249; <?php esc_html_e( 'Prev', 'kpfm' ); ?></a>
+            <a class="button button-small" href="<?php echo esc_url( kfm_audit_url( array_filter( [ 'paged' => $page_num - 1, 'kfm_user' => $filter_user, 'kfm_action' => $filter_action, 'kfm_result' => $filter_result ] ) ) ); ?>">&#8249; <?php esc_html_e( 'Prev', 'kp-file-manager' ); ?></a>
             <?php endif; ?>
             <span style="padding:0 8px;line-height:28px;font-size:13px">
-                <?php printf( esc_html__( 'Page %d of %d', 'kpfm' ), $page_num, $total_pages ); ?>
+                <?php printf( esc_html__( 'Page %d of %d', 'kp-file-manager' ), $page_num, $total_pages ); ?>
             </span>
             <?php if ( $page_num < $total_pages ) : ?>
-            <a class="button button-small" href="<?php echo esc_url( kfm_audit_url( array_filter( [ 'paged' => $page_num + 1, 'kfm_user' => $filter_user, 'kfm_action' => $filter_action, 'kfm_result' => $filter_result ] ) ) ); ?>"><?php esc_html_e( 'Next', 'kpfm' ); ?> &#8250;</a>
+            <a class="button button-small" href="<?php echo esc_url( kfm_audit_url( array_filter( [ 'paged' => $page_num + 1, 'kfm_user' => $filter_user, 'kfm_action' => $filter_action, 'kfm_result' => $filter_result ] ) ) ); ?>"><?php esc_html_e( 'Next', 'kp-file-manager' ); ?> &#8250;</a>
             <?php endif; ?>
         </div>
         <?php endif; ?>
@@ -153,12 +153,12 @@ endif;
     <table class="widefat striped" style="font-size:12px">
         <thead>
             <tr>
-                <th><?php esc_html_e( 'Time (UTC)', 'kpfm' ); ?></th>
-                <th><?php esc_html_e( 'User', 'kpfm' ); ?></th>
-                <th><?php esc_html_e( 'IP', 'kpfm' ); ?></th>
-                <th><?php esc_html_e( 'Action', 'kpfm' ); ?></th>
-                <th><?php esc_html_e( 'Path', 'kpfm' ); ?></th>
-                <th><?php esc_html_e( 'Result', 'kpfm' ); ?></th>
+                <th><?php esc_html_e( 'Time (UTC)', 'kp-file-manager' ); ?></th>
+                <th><?php esc_html_e( 'User', 'kp-file-manager' ); ?></th>
+                <th><?php esc_html_e( 'IP', 'kp-file-manager' ); ?></th>
+                <th><?php esc_html_e( 'Action', 'kp-file-manager' ); ?></th>
+                <th><?php esc_html_e( 'Path', 'kp-file-manager' ); ?></th>
+                <th><?php esc_html_e( 'Result', 'kp-file-manager' ); ?></th>
             </tr>
         </thead>
         <tbody>

@@ -9,11 +9,11 @@ Stable tag: 1.0.57
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
-A secure, role-aware file manager for WordPress. Browse, edit, upload, and manage files directly from the admin — no FTP required. Sandboxed to wp-content with per-role permissions, audit logging, and a built-in syntax-highlighting code editor.
+Secure WordPress file manager. Browse, upload & edit files from the admin — no FTP needed. Role-based permissions, audit logging & syntax highlighting.
 
 == Description ==
 
-KP File Manager gives WordPress administrators and authorized roles a full-featured file management interface directly inside the admin panel — no FTP client required. Built on UIKit 3 with a CodeMirror-powered text editor, it is designed from the ground up with security as the primary concern.
+KP File Manager gives WordPress administrators and authorized roles a full-featured file management interface directly inside the admin panel — no FTP client required. Built on UIKit 3 with a CodeMirror-powered syntax-highlighting code editor, it is designed from the ground up with security as the primary concern. All file operations are sandboxed to the `wp-content` directory, keeping core WordPress files and sensitive server paths completely out of reach. Access is controlled through a granular per-role permission system, so you decide exactly which user roles can browse, upload, edit, rename, or delete files. Every action is recorded in a detailed audit log, giving you a full history of who did what and when. Whether you need to quickly tweak a theme file, upload a custom font, or review recently modified assets, KP File Manager puts everything you need in one secure, familiar interface — right where you already work.
 
 **Features**
 
@@ -25,7 +25,7 @@ KP File Manager gives WordPress administrators and authorized roles a full-featu
 * Permissions (chmod) management with octal input and checkbox grid
 * Dark / light mode toggle with preference saved to localStorage
 * Keyboard shortcut support in the editor (Ctrl+S / Cmd+S to save, Ctrl+/ to comment, Ctrl+F to find)
-* Gutenberg block and `[kpfm_file_manager]` shortcode for front-end embedding
+* Gutenberg block and `[kp-file-manager_file_manager]` shortcode for front-end embedding
 
 **Security**
 

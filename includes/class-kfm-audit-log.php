@@ -189,7 +189,7 @@ if( !class_exists('KFM_Audit_Log') ) {
         private static function client_ip(): string {
             foreach ( [ 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR' ] as $k ) {
                 if ( ! empty( $_SERVER[ $k ] ) ) {
-                    return sanitize_text_field( explode( ',', $_SERVER[ $k ] )[0] );
+                    return sanitize_text_field( explode( ',', wp_unslash( $_SERVER[ $k ] ) )[0] );
                 }
             }
             return '0.0.0.0';

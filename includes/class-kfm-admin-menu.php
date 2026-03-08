@@ -83,8 +83,8 @@ if( !class_exists('KFM_Admin_Menu') ) {
 
             // Top-level → file browser
             $browse = add_menu_page(
-                __( 'File Manager', 'kpfm' ),
-                __( 'File Manager', 'kpfm' ),
+                __( 'File Manager', 'kp-file-manager' ),
+                __( 'File Manager', 'kp-file-manager' ),
                 'read',
                 'kp-file-manager',
                 [ $this, 'render_page' ],
@@ -94,36 +94,36 @@ if( !class_exists('KFM_Admin_Menu') ) {
 
             // file browser submenu (duplicate link for convenience) + settings submenus
             $browse2 = add_submenu_page( 'kp-file-manager',
-                __( 'Browse Files', 'kpfm' ),
-                __( 'Browse Files', 'kpfm' ),
+                __( 'Browse Files', 'kp-file-manager' ),
+                __( 'Browse Files', 'kp-file-manager' ),
                 'read', 'kp-file-manager', [ $this, 'render_page' ]
             );
 
             // settings submenu
             $settings = add_submenu_page( 'kp-file-manager',
-                __( 'General Settings', 'kpfm' ),
-                __( 'Settings', 'kpfm' ),
+                __( 'General Settings', 'kp-file-manager' ),
+                __( 'Settings', 'kp-file-manager' ),
                 'manage_options', 'kfm-settings', [ $this, 'render_settings' ]
             );
 
             // permissions submenu
             $perms = add_submenu_page( 'kp-file-manager',
-                __( 'Role Permissions', 'kpfm' ),
-                __( 'Permissions', 'kpfm' ),
+                __( 'Role Permissions', 'kp-file-manager' ),
+                __( 'Permissions', 'kp-file-manager' ),
                 'manage_options', 'kfm-permissions', [ $this, 'render_permissions' ]
             );
 
             // security submenu
             $security = add_submenu_page( 'kp-file-manager',
-                __( 'Security Settings', 'kpfm' ),
-                __( 'Security', 'kpfm' ),
+                __( 'Security Settings', 'kp-file-manager' ),
+                __( 'Security', 'kp-file-manager' ),
                 'manage_options', 'kfm-security', [ $this, 'render_security' ]
             );
 
             // audit log submenu
             $audit = add_submenu_page( 'kp-file-manager',
-                __( 'Audit Log', 'kpfm' ),
-                __( 'Audit Log', 'kpfm' ),
+                __( 'Audit Log', 'kp-file-manager' ),
+                __( 'Audit Log', 'kp-file-manager' ),
                 'manage_options', 'kfm-audit', [ $this, 'render_audit' ]
             );
 
@@ -179,7 +179,7 @@ if( !class_exists('KFM_Admin_Menu') ) {
 
             // Permission check
             if ( ! KFM_Settings::current_user_allowed() ) {
-                wp_die( __( 'You do not have permission to access the File Manager.', 'kpfm' ) );
+                wp_die( __( 'You do not have permission to access the File Manager.', 'kp-file-manager' ) );
             }
 
             // Render the file manager page
@@ -202,7 +202,7 @@ if( !class_exists('KFM_Admin_Menu') ) {
 
             // Permission check
             if ( ! current_user_can( 'manage_options' ) && ! current_user_can( 'manage_network_options' ) ) {
-                wp_die( __( 'Insufficient permissions.', 'kpfm' ) );
+                wp_die( __( 'Insufficient permissions.', 'kp-file-manager' ) );
             }
 
             // Handle network admin save
@@ -212,7 +212,7 @@ if( !class_exists('KFM_Admin_Menu') ) {
                     ? array_values( array_map( 'absint', (array) $_POST['kfm_disabled_sites'] ) )
                     : [];
                 update_site_option( 'kfm_disabled_sites', $disabled );
-                add_settings_error( 'kfm_options_group', 'saved', __( 'Settings saved.', 'kpfm' ), 'updated' );
+                add_settings_error( 'kfm_options_group', 'saved', __( 'Settings saved.', 'kp-file-manager' ), 'updated' );
             }
 
             // Render the settings page
@@ -235,15 +235,17 @@ if( !class_exists('KFM_Admin_Menu') ) {
         public function render_permissions(): void {
 
             // Permission check
-            if ( ! current_user_can( 'manage_options' ) ) wp_die( __( 'Insufficient permissions.', 'kpfm' ) );
+            if ( ! current_user_can( 'manage_options' ) ) wp_die( __( 'Insufficient permissions.', 'kp-file-manager' ) );
 
             // Handle form save (not using register_setting for the matrix – manual save)
             if ( isset( $_POST['kfm_save_permissions'] ) ) {
 
                 // Verify nonce and save permissions
                 check_admin_referer( 'kfm_save_permissions' );
-                KFM_Permissions::save_from_post( $_POST['kfm_perms'] ?? [] );
-                add_settings_error( 'kfm_permissions', 'saved', __( 'Permissions saved.', 'kpfm' ), 'updated' );
+                // setup the permissions and save them
+                $perms = wp_unslash( $_POST['kfm_perms'] );
+                KFM_Permissions::save_from_post( $perms ?? [] );
+                add_settings_error( 'kfm_permissions', 'saved', __( 'Permissions saved.', 'kp-file-manager' ), 'updated' );
             }
 
             // Render the permissions page
@@ -265,7 +267,7 @@ if( !class_exists('KFM_Admin_Menu') ) {
         public function render_security(): void {
 
             // Permission check
-            if ( ! current_user_can( 'manage_options' ) ) wp_die( __( 'Insufficient permissions.', 'kpfm' ) );
+            if ( ! current_user_can( 'manage_options' ) ) wp_die( __( 'Insufficient permissions.', 'kp-file-manager' ) );
 
             // Render the security settings page
             include KFM_PLUGIN_DIR . 'templates/settings-security.php';
@@ -287,7 +289,7 @@ if( !class_exists('KFM_Admin_Menu') ) {
         public function render_audit(): void {
 
             // Permission check
-            if ( ! current_user_can( 'manage_options' ) ) wp_die( __( 'Insufficient permissions.', 'kpfm' ) );
+            if ( ! current_user_can( 'manage_options' ) ) wp_die( __( 'Insufficient permissions.', 'kp-file-manager' ) );
 
             // Handle clear
             if ( isset( $_POST['kfm_clear_log'] ) ) {
@@ -295,7 +297,7 @@ if( !class_exists('KFM_Admin_Menu') ) {
                 // Verify nonce and clear log
                 check_admin_referer( 'kfm_clear_log' );
                 KFM_Audit_Log::clear();
-                add_settings_error( 'kfm_audit', 'cleared', __( 'Audit log cleared.', 'kpfm' ), 'updated' );
+                add_settings_error( 'kfm_audit', 'cleared', __( 'Audit log cleared.', 'kp-file-manager' ), 'updated' );
             }
 
             // Render the audit log page

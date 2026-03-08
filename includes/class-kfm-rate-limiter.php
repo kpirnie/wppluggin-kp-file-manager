@@ -63,7 +63,7 @@ if( !class_exists('KFM_Rate_Limiter') ) {
             $count = (int) get_transient( $count_key );
             if ( $count >= self::MAX_WRITE_OPS ) {
                 KFM_Audit_Log::write( $action, '', 'blocked - rate limit exceeded' );
-                return new WP_Error( 'kfm_rate_limit', __( 'Too many operations. Please wait a moment and try again.', 'kpfm' ) );
+                return new WP_Error( 'kfm_rate_limit', __( 'Too many operations. Please wait a moment and try again.', 'kp-file-manager' ) );
             }
 
             $remaining = self::WINDOW_SECS - ( time() - (int) $start );
@@ -108,7 +108,7 @@ if( !class_exists('KFM_Rate_Limiter') ) {
             // Check common server variables for the client's IP address, accounting for proxies and CDNs
             foreach ( [ 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR' ] as $k ) {
                 if ( ! empty( $_SERVER[ $k ] ) ) {
-                    return sanitize_text_field( explode( ',', $_SERVER[ $k ] )[0] );
+                    return sanitize_text_field( explode( ',', wp_unslash( $_SERVER[ $k ] ) )[0] );
                 }
             }
 

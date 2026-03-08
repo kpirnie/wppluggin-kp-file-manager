@@ -13,11 +13,11 @@ defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
 
 ?>
 <div class="wrap">
-    <h1><?php _e( 'Role Permissions', 'kpfm' ); ?></h1>
+    <h1><?php _e( 'Role Permissions', 'kp-file-manager' ); ?></h1>
 
     <?php settings_errors( 'kfm_permissions' ); ?>
 
-    <p><?php _e( 'Control which operations each role can perform. Administrators always have full access and cannot be restricted.', 'kpfm' ); ?></p>
+    <p><?php _e( 'Control which operations each role can perform. Administrators always have full access and cannot be restricted.', 'kp-file-manager' ); ?></p>
 
     <form method="post">
         <?php wp_nonce_field( 'kfm_save_permissions' ); ?>
@@ -33,7 +33,7 @@ defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
             <thead>
                 <tr>
                     <th style="min-width:140px;padding:10px 12px;text-align:left;background:#f8f9fa;border-bottom:2px solid #ccd0d4">
-                        <?php _e( 'Role', 'kpfm' ); ?>
+                        <?php _e( 'Role', 'kp-file-manager' ); ?>
                     </th>
                     <?php foreach ( $ops as $op => $desc ) : ?>
                     <th style="padding:10px 8px;text-align:center;background:#f8f9fa;border-bottom:2px solid #ccd0d4;min-width:80px">
@@ -43,7 +43,7 @@ defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
                     </th>
                     <?php endforeach; ?>
                     <th style="padding:10px 8px;text-align:center;background:#f8f9fa;border-bottom:2px solid #ccd0d4;min-width:80px">
-                        <?php _e( 'All', 'kpfm' ); ?>
+                        <?php _e( 'All', 'kp-file-manager' ); ?>
                     </th>
                 </tr>
             </thead>
@@ -61,11 +61,11 @@ defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
                         <?php echo esc_html( $label ); ?>
                         <?php if ( $is_admin ) : ?>
                             <span style="font-size:10px;background:#1e87f0;color:#fff;padding:1px 6px;border-radius:3px;font-weight:normal;margin-left:5px;vertical-align:middle">
-                                <?php _e( 'Full', 'kpfm' ); ?>
+                                <?php _e( 'Full', 'kp-file-manager' ); ?>
                             </span>
                         <?php elseif ( $is_anon ) : ?>
                             <span style="font-size:10px;background:#f59e0b;color:#fff;padding:1px 6px;border-radius:3px;font-weight:normal;margin-left:5px;vertical-align:middle">
-                                <?php _e( 'Anon', 'kpfm' ); ?>
+                                <?php _e( 'Anon', 'kp-file-manager' ); ?>
                             </span>
                         <?php endif; ?>
                     </td>
@@ -93,10 +93,10 @@ defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
                                 class="button button-small kfm-toggle-row"
                                 data-role="<?php echo esc_attr( $slug ); ?>"
                                 style="font-size:11px;padding:0 8px;height:24px">
-                            <?php _e( 'Toggle', 'kpfm' ); ?>
+                            <?php _e( 'Toggle', 'kp-file-manager' ); ?>
                         </button>
                         <?php else : ?>
-                        <span style="color:#999;font-size:11px"><?php _e( 'Locked', 'kpfm' ); ?></span>
+                        <span style="color:#999;font-size:11px"><?php _e( 'Locked', 'kp-file-manager' ); ?></span>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -106,7 +106,7 @@ defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
 
         <!-- Operation legend -->
         <div style="margin-top:16px;padding:14px 18px;background:#f8f9fa;border:1px solid #e2e8f0;border-radius:4px;max-width:900px">
-            <strong style="font-size:12px"><?php _e( 'Operation descriptions:', 'kpfm' ); ?></strong>
+            <strong style="font-size:12px"><?php _e( 'Operation descriptions:', 'kp-file-manager' ); ?></strong>
             <ul style="margin:8px 0 0;columns:2;font-size:12px;list-style:disc;padding-left:20px">
                 <?php foreach ( $ops as $op => $desc ) : ?>
                 <li style="margin-bottom:4px"><strong><?php echo esc_html( ucfirst( $op ) ); ?></strong> — <?php echo esc_html( $desc ); ?></li>
@@ -115,10 +115,10 @@ defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
         </div>
 
         <p style="margin-top:16px">
-            <?php submit_button( __( 'Save Permissions', 'kpfm' ), 'primary', 'submit', false ); ?>
+            <?php submit_button( __( 'Save Permissions', 'kp-file-manager' ), 'primary', 'submit', false ); ?>
             &nbsp;
             <button type="button" id="kfm-reset-perms" class="button button-secondary">
-                <?php _e( 'Reset to Defaults', 'kpfm' ); ?>
+                <?php _e( 'Reset to Defaults', 'kp-file-manager' ); ?>
             </button>
         </p>
     </form>
@@ -136,7 +136,7 @@ jQuery( function( $ ) {
 
     // Reset to defaults (admins full, everyone else none)
     $( '#kfm-reset-perms' ).on( 'click', function () {
-        if ( ! confirm( '<?php echo esc_js( __( 'Reset all permissions to defaults? Administrators keep full access, all other roles will have no permissions.', 'kpfm' ) ); ?>' ) ) return;
+        if ( ! confirm( '<?php echo esc_js( __( 'Reset all permissions to defaults? Administrators keep full access, all other roles will have no permissions.', 'kp-file-manager' ) ); ?>' ) ) return;
         $( '.kfm-perm-cb:not(:disabled)' ).prop( 'checked', false );
     } );
 } );

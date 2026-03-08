@@ -8,7 +8,7 @@
  * Requires PHP:      8.2
  * Author:            Kevin Pirnie
  * License:           GPLv3
- * Text Domain:       kpfm
+ * Text Domain:       kp-file-manager
  */
 
 // Exit if accessed directly.

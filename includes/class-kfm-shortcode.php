@@ -84,7 +84,7 @@ if ( ! class_exists( 'KFM_Shortcode' ) ) {
 
             // Permission check – only render if user has access, otherwise show message
             if ( ! KFM_Settings::current_user_allowed() ) {
-                return '<p>' . esc_html__( 'You do not have permission to access the File Manager.', 'kfm-file-manager' ) . '</p>';
+                return '<p>' . esc_html__( 'You do not have permission to access the File Manager.', 'kp-file-manager' ) . '</p>';
             }
 
             // Enqueue necessary assets for the frontend file manager

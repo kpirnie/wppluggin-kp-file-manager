@@ -203,7 +203,7 @@ if( !class_exists('KFM_Permissions') ) {
             }
 
             // Add a special 'anonymous' role for users who are not logged in, with a translated label
-            $roles['anonymous'] = __( 'Anonymous (not logged in)', 'kpfm' );
+            $roles['anonymous'] = __( 'Anonymous (not logged in)', 'kp-file-manager' );
 
             // Return the complete list of roles
             return $roles;

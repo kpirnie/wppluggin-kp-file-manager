@@ -124,12 +124,12 @@ if( !class_exists('KFM_Asset_Loader') ) {
                 'chmodFloor'   => KFM_Settings::get_chmod_floor(),
                 'allowedOps'   => $this->current_user_allowed_ops(),
                 'i18n'         => [
-                    'confirmDelete'    => __( 'Delete selected item(s)? This cannot be undone.', 'kpfm' ),
-                    'confirmOverwrite' => __( 'Destination already exists. Overwrite?', 'kpfm' ),
-                    'errorGeneric'     => __( 'An error occurred. Please try again.', 'kpfm' ),
-                    'saved'            => __( 'File saved successfully.', 'kpfm' ),
-                    'loading'          => __( 'Loading…', 'kpfm' ),
-                    'warnDangerousFn'  => __( 'This file contains potentially dangerous functions (eval, exec, system, etc.).\n\nSave anyway?', 'kpfm' ),
+                    'confirmDelete'    => __( 'Delete selected item(s)? This cannot be undone.', 'kp-file-manager' ),
+                    'confirmOverwrite' => __( 'Destination already exists. Overwrite?', 'kp-file-manager' ),
+                    'errorGeneric'     => __( 'An error occurred. Please try again.', 'kp-file-manager' ),
+                    'saved'            => __( 'File saved successfully.', 'kp-file-manager' ),
+                    'loading'          => __( 'Loading…', 'kp-file-manager' ),
+                    'warnDangerousFn'  => __( 'This file contains potentially dangerous functions (eval, exec, system, etc.).\n\nSave anyway?', 'kp-file-manager' ),
                 ],
             ];
         }
