@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Asset Loader class.
  * Handles all asset enqueueing for the file manager.
@@ -10,10 +11,10 @@
  */
 
 // Exit if accessed directly.
-defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
+defined('ABSPATH') || die('Direct access is not allowed!');
 
 // Check if the class already exists to prevent redeclaration errors.
-if( !class_exists('KFM_Asset_Loader') ) {
+if (!class_exists('KFM_Asset_Loader')) {
 
     /**
      * Handles all asset enqueueing for KFM — UIKit, CodeMirror, kfm-app.js,
@@ -24,7 +25,8 @@ if( !class_exists('KFM_Asset_Loader') ) {
      * @author Kevin Pirnie <iam@kevinpirnie.com>
      *
      */
-    class KFM_Asset_Loader {
+    class KFM_Asset_Loader
+    {
 
         /**
          * enqueues the UIkit assets.
@@ -37,10 +39,11 @@ if( !class_exists('KFM_Asset_Loader') ) {
          * @return void
          *
          */
-        public function enqueue_uikit(): void {
-            wp_enqueue_style(  'uikit',       'https://cdn.jsdelivr.net/npm/uikit@latest/dist/css/uikit.min.css', [], null, false );
-            wp_enqueue_script( 'uikit',       'https://cdn.jsdelivr.net/npm/uikit@latest/dist/js/uikit.min.js',   [], null, true  );
-            wp_enqueue_script( 'uikit-icons', 'https://cdn.jsdelivr.net/npm/uikit@latest/dist/js/uikit-icons.min.js', [ 'uikit' ], null, true );
+        public function enqueue_uikit(): void
+        {
+            wp_enqueue_style('uikit',       'https://cdn.jsdelivr.net/npm/uikit@latest/dist/css/uikit.min.css', [], null, false);
+            wp_enqueue_script('uikit',       'https://cdn.jsdelivr.net/npm/uikit@latest/dist/js/uikit.min.js',   [], null, true);
+            wp_enqueue_script('uikit-icons', 'https://cdn.jsdelivr.net/npm/uikit@latest/dist/js/uikit-icons.min.js', ['uikit'], null, true);
         }
 
         /**
@@ -54,18 +57,24 @@ if( !class_exists('KFM_Asset_Loader') ) {
          * @return void
          *
          */
-        public function enqueue_file_manager(): void {
+        public function enqueue_file_manager(): void
+        {
+            // Register + enqueue jQuery explicitly — no longer auto-registered on the frontend in WP 6.9.1+
+            if (! wp_script_is('jquery', 'registered')) {
+                wp_register_script('jquery', includes_url('js/jquery/jquery.min.js'), [], false, true);
+            }
+            wp_enqueue_script('jquery');
 
             // enqueue CodeMirror with a basic mode to get the editor assets loaded.
-            $cm = wp_enqueue_code_editor( [ 'type' => 'text/plain' ] );
-            wp_enqueue_style(  'wp-codemirror' );
-            wp_enqueue_script( 'wp-codemirror' );
+            $cm = wp_enqueue_code_editor(['type' => 'text/plain']);
+            wp_enqueue_style('wp-codemirror');
+            wp_enqueue_script('wp-codemirror');
 
             // enqueue KFM's custom stylesheet
             wp_enqueue_style(
                 'kfm-style',
                 KFM_PLUGIN_URL . 'assets/css/kfm-style.css',
-                [ 'uikit', 'wp-codemirror' ],
+                ['uikit', 'wp-codemirror'],
                 KFM_VERSION
             );
 
@@ -73,7 +82,7 @@ if( !class_exists('KFM_Asset_Loader') ) {
             wp_enqueue_script(
                 'kfm-app',
                 KFM_PLUGIN_URL . 'assets/js/kfm-app.js',
-                [ 'jquery', 'uikit', 'uikit-icons', 'wp-codemirror' ],
+                ['jquery', 'uikit', 'uikit-icons', 'wp-codemirror'],
                 KFM_VERSION,
                 true
             );
@@ -81,7 +90,7 @@ if( !class_exists('KFM_Asset_Loader') ) {
             // Merge CodeMirror settings into localisation data and pass to JS
             $data               = $this->kfm_localize_data();
             $data['cmSettings'] = $cm;
-            wp_localize_script( 'kfm-app', 'KFM', $data );
+            wp_localize_script('kfm-app', 'KFM', $data);
         }
 
         /**
@@ -95,8 +104,9 @@ if( !class_exists('KFM_Asset_Loader') ) {
          * @return void
          *
          */
-        public function enqueue_admin_styles(): void {
-            wp_enqueue_style( 'kfm-admin', KFM_PLUGIN_URL . 'assets/css/kfm-admin.css', [ 'uikit' ], KFM_VERSION );
+        public function enqueue_admin_styles(): void
+        {
+            wp_enqueue_style('kfm-admin', KFM_PLUGIN_URL . 'assets/css/kfm-admin.css', ['uikit'], KFM_VERSION);
         }
 
         /**
@@ -113,12 +123,13 @@ if( !class_exists('KFM_Asset_Loader') ) {
          * @return array
          *
          */
-        private function kfm_localize_data(): array {
+        private function kfm_localize_data(): array
+        {
 
             // return the data array to be passed to JS via wp_localize_script
             return [
-                'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
-                'nonce'        => wp_create_nonce( 'kfm_nonce' ),
+                'ajaxUrl'      => admin_url('admin-ajax.php'),
+                'nonce'        => wp_create_nonce('kfm_nonce'),
                 'basePath'     => KFM_Settings::get_display_base(),
                 'blockedExts'  => KFM_Settings::get_blocked_exts(),
                 'readonlyExts' => KFM_Settings::get_readonly_exts(),
@@ -126,12 +137,12 @@ if( !class_exists('KFM_Asset_Loader') ) {
                 // Pass current user's allowed ops so JS can hide/disable buttons
                 'allowedOps'   => $this->current_user_allowed_ops(),
                 'i18n'         => [
-                    'confirmDelete'    => __( 'Delete selected item(s)? This cannot be undone.', 'kp-file-manager' ),
-                    'confirmOverwrite' => __( 'Destination already exists. Overwrite?', 'kp-file-manager' ),
-                    'errorGeneric'     => __( 'An error occurred. Please try again.', 'kp-file-manager' ),
-                    'saved'            => __( 'File saved successfully.', 'kp-file-manager' ),
-                    'loading'          => __( 'Loading…', 'kp-file-manager' ),
-                    'warnDangerousFn'  => __( 'This file contains potentially dangerous functions (eval, exec, system, etc.).\n\nSave anyway?', 'kp-file-manager' ),
+                    'confirmDelete'    => __('Delete selected item(s)? This cannot be undone.', 'kp-file-manager'),
+                    'confirmOverwrite' => __('Destination already exists. Overwrite?', 'kp-file-manager'),
+                    'errorGeneric'     => __('An error occurred. Please try again.', 'kp-file-manager'),
+                    'saved'            => __('File saved successfully.', 'kp-file-manager'),
+                    'loading'          => __('Loading…', 'kp-file-manager'),
+                    'warnDangerousFn'  => __('This file contains potentially dangerous functions (eval, exec, system, etc.).\n\nSave anyway?', 'kp-file-manager'),
                 ],
             ];
         }
@@ -148,13 +159,14 @@ if( !class_exists('KFM_Asset_Loader') ) {
          * @return array
          *
          */
-        private function current_user_allowed_ops(): array {
+        private function current_user_allowed_ops(): array
+        {
 
             // hold the allowed ops for the current user
             $allowed = [];
 
             // Loop through all defined ops and check if the user has permission for each
-            foreach ( array_keys( KFM_Permissions::OPS ) as $op ) {
+            foreach (array_keys(KFM_Permissions::OPS) as $op) {
 
                 // Map op back to a representative action for the check
                 $action_map = [
@@ -168,7 +180,7 @@ if( !class_exists('KFM_Asset_Loader') ) {
                 ];
 
                 // Check if the user has permission for this op and add to allowed array if so
-                if ( KFM_Permissions::current_user_can_op( $action_map[ $op ] ) ) {
+                if (KFM_Permissions::current_user_can_op($action_map[$op])) {
                     $allowed[] = $op;
                 }
             }
