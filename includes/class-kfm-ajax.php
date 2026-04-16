@@ -85,26 +85,11 @@ if( !class_exists('KFM_Ajax') ) {
             
             // permission check for the current user
             if ( ! KFM_Settings::current_user_allowed() ) {
-                wp_send_json_error( [ 'message' => __( 'Permission denied.', 'kpfm' ) ], 403 );
+                wp_send_json_error( [ 'message' => __( 'Permission denied.', 'kp-file-manager' ) ], 403 );
             }
 
             // check the nonce for security
             check_ajax_referer( 'kfm_nonce', 'nonce' );
-
-            // check the referer to prevent CSRF attacks
-            $referer = wp_get_referer();
-            if ( $referer ) {
-
-                // parse the host from the referer and the site URL to compare them
-                $ref_host  = wp_parse_url( $referer, PHP_URL_HOST );
-                $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
-
-                // if the referer host does not match the site host, block the request and log it
-                if ( $ref_host !== $site_host ) {
-                    KFM_Audit_Log::write( 'dispatch', '', 'blocked - bad referer: ' . $ref_host );
-                    wp_send_json_error( [ 'message' => __( 'Request origin mismatch.', 'kpfm' ) ], 403 );
-                }
-            }
 
             // sanitize and validate the action parameter
             $action = sanitize_key( $_REQUEST['action'] ?? '' );
@@ -112,7 +97,7 @@ if( !class_exists('KFM_Ajax') ) {
             // check the user's permissions for the requested action and log any unauthorized attempts
             if ( ! KFM_Permissions::current_user_can_op( $action ) ) {
                 KFM_Audit_Log::write( $action, $this->rel(), 'blocked - role permission denied' );
-                wp_send_json_error( [ 'message' => __( 'Your role does not have permission to perform this operation.', 'kpfm' ) ], 403 );
+                wp_send_json_error( [ 'message' => __( 'Your role does not have permission to perform this operation.', 'kp-file-manager' ) ], 403 );
             }
 
             // check the rate limit for the requested action and log any blocked attempts
@@ -136,7 +121,7 @@ if( !class_exists('KFM_Ajax') ) {
                 case 'kfm_upload':       $this->handle_upload();      break;
                 case 'kfm_download':     $this->handle_download();    break;
                 default:
-                    wp_send_json_error( [ 'message' => __( 'Unknown action.', 'kpfm' ) ], 400 );
+                    wp_send_json_error( [ 'message' => __( 'Unknown action.', 'kp-file-manager' ) ], 400 );
             }
         }
 
@@ -185,7 +170,12 @@ if( !class_exists('KFM_Ajax') ) {
          * 
          */
         private function rel( string $key = 'path' ): string {
-            return sanitize_text_field( wp_unslash( $_REQUEST[ $key ] ?? '' ) );
+            // Strip null bytes only. sanitize_text_field() is intentionally NOT used here —
+            // it strips characters that are valid in filenames (brackets, quotes, etc.) and
+            // can silently corrupt paths. Actual sandbox enforcement is handled by
+            // KFM_File_Manager::resolve() via realpath(), which is the authoritative gate.
+            $raw = wp_unslash( $_REQUEST[ $key ] ?? '' );
+            return str_replace( "\0", '', $raw );
         }
 
         /**
@@ -312,7 +302,7 @@ if( !class_exists('KFM_Ajax') ) {
          */
         private function handle_copy(): void {
             $path = $this->rel();
-            $dest = sanitize_text_field( wp_unslash( $_POST['dest'] ?? '' ) );
+            $dest = str_replace( "\0", '', wp_unslash( $_POST['dest'] ?? '' ) );
             $this->send( $this->fm->copy( $path, $dest ), 'kfm_copy', $path . ' → ' . $dest );
         }
 
@@ -329,7 +319,7 @@ if( !class_exists('KFM_Ajax') ) {
          */
         private function handle_move(): void {  
             $path = $this->rel();
-            $dest = sanitize_text_field( wp_unslash( $_POST['dest'] ?? '' ) );
+            $dest = str_replace( "\0", '', wp_unslash( $_POST['dest'] ?? '' ) );
             $this->send( $this->fm->move( $path, $dest ), 'kfm_move', $path . ' → ' . $dest );
         }
 
@@ -346,7 +336,7 @@ if( !class_exists('KFM_Ajax') ) {
          */
         private function handle_chmod(): void {
             $path = $this->rel();
-            $mode = preg_replace( '/[^0-7]/', '', $_POST['mode'] ?? '' );
+            $mode = preg_replace( '/[^0-7]/', '', wp_unslash( $_POST['mode'] ) ?? '' );
             $this->send( $this->fm->chmod( $path, $mode ), 'kfm_chmod', $path . ' ' . $mode );
         }
 
@@ -365,10 +355,10 @@ if( !class_exists('KFM_Ajax') ) {
             
             // check if a file was uploaded and return an error if not
             if ( empty( $_FILES['file'] ) ) {
-                wp_send_json_error( [ 'message' => __( 'No file received.', 'kpfm' ) ], 400 );
+                wp_send_json_error( [ 'message' => __( 'No file received.', 'kp-file-manager' ) ], 400 );
             }
             $dir = $this->rel( 'dir' );
-            $this->send( $this->fm->upload( $dir, $_FILES['file'] ), 'kfm_upload', $dir . '/' . ( $_FILES['file']['name'] ?? '' ) );
+            $this->send( $this->fm->upload( $dir, $_FILES['file'] ), 'kfm_upload', $dir . '/' . ( sanitize_file_name( $_FILES['file']['name'] ) ?? '' ) );
         }
 
         /**
@@ -389,7 +379,7 @@ if( !class_exists('KFM_Ajax') ) {
             $path = $this->fm->resolve( $rel );
 
             if ( ! $path || ! is_file( $path ) ) {
-                wp_send_json_error( [ 'message' => __( 'File not found.', 'kpfm' ) ], 404 );
+                wp_send_json_error( [ 'message' => __( 'File not found.', 'kp-file-manager' ) ], 404 );
             }
 
             $filename = basename( $path );
@@ -409,8 +399,20 @@ if( !class_exists('KFM_Ajax') ) {
 
             // Read via file manager
             if ( ! is_readable( $path ) ) {
-                wp_send_json_error( [ 'message' => __( 'File is not readable.', 'kpfm' ) ], 403 );
+                wp_send_json_error( [ 'message' => __( 'File is not readable.', 'kp-file-manager' ) ], 403 );
             }
+
+            // get the filesize
+            $size = filesize( $path );
+
+            // Configurable via filter; default 250 MB
+            $max_bytes = (int) apply_filters( 'kfm_max_download_bytes', 250 * 1024 * 1024 );
+            if ( $max_bytes > 0 && $size > $max_bytes ) {
+                wp_send_json_error( [ 'message' => __( 'File is too large to download through the file manager.', 'kpfm' ) ], 403 );
+            }
+
+            // Strip characters that would break out of the quoted Content-Disposition value
+            $filename = str_replace( [ '"', "\r", "\n" ], [ '\\"', '', '' ], basename( $path ) );
 
             nocache_headers();
             header( 'Content-Type: ' . $mime );

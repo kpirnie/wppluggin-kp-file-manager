@@ -8,7 +8,7 @@
     "icon"       : "media-document",
     "description": "Embeds the KFM File Manager.  Access is governed by the plugin's role setting.",
     "keywords"   : [ "file", "manager", "files", "media", "kfm" ],
-    "textdomain" : "kfm-file-manager",
+    "textdomain" : "kp-file-manager",
     "supports"   : {
         "html"           : false,
         "align"          : [ "wide", "full" ],

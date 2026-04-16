@@ -187,12 +187,34 @@ if( !class_exists('KFM_Audit_Log') ) {
          * @return string
          */
         private static function client_ip(): string {
-            foreach ( [ 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR' ] as $k ) {
-                if ( ! empty( $_SERVER[ $k ] ) ) {
-                    return sanitize_text_field( explode( ',', $_SERVER[ $k ] )[0] );
+            $remote = isset( $_SERVER['REMOTE_ADDR'] )
+                ? sanitize_text_field( $_SERVER['REMOTE_ADDR'] )
+                : '0.0.0.0';
+
+            /**
+             * Filters the list of trusted reverse-proxy IPs.
+             *
+             * When REMOTE_ADDR matches an entry here, KFM will inspect
+             * HTTP_CF_CONNECTING_IP and HTTP_X_FORWARDED_FOR for the real client IP.
+             * Leave empty (the default) to use REMOTE_ADDR unconditionally.
+             *
+             * Example (add to wp-config.php or a must-use plugin):
+             *   add_filter( 'kfm_trusted_proxies', fn() => [ '10.0.0.1', '192.168.1.1' ] );
+             *
+             * @param string[] $proxies Array of trusted proxy IP addresses.
+             */
+            $trusted = (array) apply_filters( 'kfm_trusted_proxies', [] );
+
+            if ( ! empty( $trusted ) && in_array( $remote, $trusted, true ) ) {
+                if ( ! empty( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
+                    return sanitize_text_field( trim( explode( ',', $_SERVER['HTTP_CF_CONNECTING_IP'] )[0] ) );
+                }
+                if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+                    return sanitize_text_field( trim( explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] )[0] ) );
                 }
             }
-            return '0.0.0.0';
+
+            return $remote;
         }
     }
 }

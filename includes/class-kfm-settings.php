@@ -137,7 +137,7 @@ if( !class_exists('KFM_Settings') ) {
             $wp_content = realpath( WP_CONTENT_DIR );
             $resolved   = realpath( $wp_content . DIRECTORY_SEPARATOR . $value );
             if ( $resolved === false || strpos( $resolved, $wp_content ) !== 0 ) {
-                add_settings_error( self::OPTION_PATH, 'kfm_bad_path', __( 'Invalid path - must be inside wp-content.', 'kpfm' ) );
+                add_settings_error( self::OPTION_PATH, 'kfm_bad_path', __( 'Invalid path - must be inside wp-content.', 'kp-file-manager' ) );
                 return '';
             }
 
@@ -517,7 +517,7 @@ if( !class_exists('KFM_Settings') ) {
 
             // Clear the audit log and redirect back to the settings page with a success message
             KFM_Audit_Log::clear();
-            wp_redirect( admin_url( 'admin.php?page=kfm-settings&kfm_log_cleared=1' ) );
+            wp_safe_redirect( admin_url( 'admin.php?page=kfm-settings&kfm_log_cleared=1' ) );
             exit;
         }
     }

@@ -27,6 +27,7 @@ if( !class_exists('KFM_Rate_Limiter') ) {
 
         // Define the maximum number of write operations allowed within the time window
         const MAX_WRITE_OPS = 60;
+        const MAX_READ_OPS  = 120;
         const WINDOW_SECS   = 60;
 
         // List of actions that are considered "write" operations and should be rate-limited
@@ -34,6 +35,11 @@ if( !class_exists('KFM_Rate_Limiter') ) {
             'kfm_write', 'kfm_create_file', 'kfm_create_dir',
             'kfm_delete', 'kfm_rename', 'kfm_copy', 'kfm_move',
             'kfm_chmod', 'kfm_upload',
+        ];
+
+        // list of rate-limited read actions
+        const READ_ACTIONS = [
+            'kfm_list', 'kfm_read', 'kfm_download',
         ];
 
         /**
@@ -47,9 +53,29 @@ if( !class_exists('KFM_Rate_Limiter') ) {
          * @return true|WP_Error
          */
         public static function check( string $action ): true|WP_Error {
-            if ( ! in_array( $action, self::WRITE_ACTIONS, true ) ) return true;
+            if ( in_array( $action, self::WRITE_ACTIONS, true ) ) {
+                return self::check_limit( $action, 'w', self::MAX_WRITE_OPS );
+            }
+            if ( in_array( $action, self::READ_ACTIONS, true ) ) {
+                return self::check_limit( $action, 'r', self::MAX_READ_OPS );
+            }
+            return true;
+        }
 
-            $key       = self::key();
+        /**
+         * Check the rate limit for a given action and bucket.
+         *
+         * @package KP - File Manager
+         * @since 1.0.0
+         * @author Kevin Pirnie <iam@kevinpirnie.com>
+         * 
+         * @param string $action The action being performed (for logging purposes).
+         * @param string $bucket A short identifier for the type of action (e.g., 'w' for write, 'r' for read).
+         * @param int $max The maximum number of allowed actions within the time window.
+         * @return true|WP_Error Returns true if the action is allowed, or a WP_Error if the rate limit has been exceeded.
+         */
+        private static function check_limit( string $action, string $bucket, int $max ): true|WP_Error {
+            $key       = self::key() . '_' . $bucket;
             $count_key = $key . '_count';
             $start_key = $key . '_start';
 
@@ -61,7 +87,7 @@ if( !class_exists('KFM_Rate_Limiter') ) {
             }
 
             $count = (int) get_transient( $count_key );
-            if ( $count >= self::MAX_WRITE_OPS ) {
+            if ( $count >= $max ) {
                 KFM_Audit_Log::write( $action, '', 'blocked - rate limit exceeded' );
                 return new WP_Error( 'kfm_rate_limit', __( 'Too many operations. Please wait a moment and try again.', 'kpfm' ) );
             }
@@ -104,16 +130,34 @@ if( !class_exists('KFM_Rate_Limiter') ) {
          * @return string
          */
         private static function client_ip(): string {
+            $remote = isset( $_SERVER['REMOTE_ADDR'] )
+                ? sanitize_text_field( $_SERVER['REMOTE_ADDR'] )
+                : '0.0.0.0';
 
-            // Check common server variables for the client's IP address, accounting for proxies and CDNs
-            foreach ( [ 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR' ] as $k ) {
-                if ( ! empty( $_SERVER[ $k ] ) ) {
-                    return sanitize_text_field( explode( ',', $_SERVER[ $k ] )[0] );
+            /**
+             * Filters the list of trusted reverse-proxy IPs.
+             *
+             * When REMOTE_ADDR matches an entry here, KFM will inspect
+             * HTTP_CF_CONNECTING_IP and HTTP_X_FORWARDED_FOR for the real client IP.
+             * Leave empty (the default) to use REMOTE_ADDR unconditionally.
+             *
+             * Example (add to wp-config.php or a must-use plugin):
+             *   add_filter( 'kfm_trusted_proxies', fn() => [ '10.0.0.1', '192.168.1.1' ] );
+             *
+             * @param string[] $proxies Array of trusted proxy IP addresses.
+             */
+            $trusted = (array) apply_filters( 'kfm_trusted_proxies', [] );
+
+            if ( ! empty( $trusted ) && in_array( $remote, $trusted, true ) ) {
+                if ( ! empty( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
+                    return sanitize_text_field( trim( explode( ',', $_SERVER['HTTP_CF_CONNECTING_IP'] )[0] ) );
+                }
+                if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+                    return sanitize_text_field( trim( explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] )[0] ) );
                 }
             }
 
-            // default to a placeholder IP if none of the server variables are set (should not happen in normal circumstances)
-            return '0.0.0.0';
+            return $remote;
         }
     }
 }

@@ -10,7 +10,7 @@ defined( 'ABSPATH' ) || exit;
 
 if ( ! KFM_Settings::current_user_allowed() ) {
     echo '<p class="kfm-block-no-access">'
-         . esc_html__( 'You do not have permission to access the File Manager.', 'kfm-file-manager' )
+         . esc_html__( 'You do not have permission to access the File Manager.', 'kp-file-manager' )
          . '</p>';
     return;
 }

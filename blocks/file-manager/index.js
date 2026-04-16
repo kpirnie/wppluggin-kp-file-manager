@@ -31,11 +31,11 @@
                     el(
                         PanelBody,
                         {
-                            title      : __( 'File Manager Settings', 'kfm-file-manager' ),
+                            title      : __( 'File Manager Settings', 'kp-file-manager' ),
                             initialOpen: true,
                         },
                         el( RangeControl, {
-                            label   : __( 'Height (px)', 'kfm-file-manager' ),
+                            label   : __( 'Height (px)', 'kp-file-manager' ),
                             value   : height,
                             min     : 300,
                             max     : 1200,
@@ -43,7 +43,7 @@
                             onChange: function ( v ) { setAttributes( { height: v } ); },
                         } ),
                         el( ToggleControl, {
-                            label   : __( 'Show folder tree panel', 'kfm-file-manager' ),
+                            label   : __( 'Show folder tree panel', 'kp-file-manager' ),
                             checked : showTree,
                             onChange: function ( v ) { setAttributes( { showTree: v } ); },
                         } )
@@ -62,19 +62,19 @@
                         ),
 
                         el( 'p', { className: 'kfm-block-preview__title' },
-                            __( 'KFM File Manager', 'kfm-file-manager' )
+                            __( 'KFM File Manager', 'kp-file-manager' )
                         ),
 
                         el( 'p', { className: 'kfm-block-preview__meta' },
-                            __( 'Height: ', 'kfm-file-manager' ),
+                            __( 'Height: ', 'kp-file-manager' ),
                             el( 'strong', null, height + 'px' ),
                             showTree
-                                ? el( 'span', { className: 'kfm-block-preview__badge kfm-badge-on'  }, __( 'Tree: On',  'kfm-file-manager' ) )
-                                : el( 'span', { className: 'kfm-block-preview__badge kfm-badge-off' }, __( 'Tree: Off', 'kfm-file-manager' ) )
+                                ? el( 'span', { className: 'kfm-block-preview__badge kfm-badge-on'  }, __( 'Tree: On',  'kp-file-manager' ) )
+                                : el( 'span', { className: 'kfm-block-preview__badge kfm-badge-off' }, __( 'Tree: Off', 'kp-file-manager' ) )
                         ),
 
                         el( 'p', { className: 'kfm-block-preview__hint' },
-                            __( 'The live file manager will appear on the front end.  Use the sidebar to adjust height and tree visibility.', 'kfm-file-manager' )
+                            __( 'The live file manager will appear on the front end.  Use the sidebar to adjust height and tree visibility.', 'kp-file-manager' )
                         ),
 
                         el( Notice, {
@@ -82,7 +82,7 @@
                             isDismissible: false,
                             className  : 'kfm-block-preview__notice',
                         },
-                            __( 'Access is controlled by the role setting in File Manager \u2192 Settings.', 'kfm-file-manager' )
+                            __( 'Access is controlled by the role setting in File Manager \u2192 Settings.', 'kp-file-manager' )
                         )
                     )
                 )
