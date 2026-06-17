@@ -22,12 +22,13 @@ defined('ABSPATH') || die('Direct access is not allowed!');
     <?php endif; ?>
     <?php settings_errors('kfm_options_group'); ?>
 
-    <form method="post" action="options.php">
+    <form method="post">
         <?php if (is_network_admin()) : ?>
             <?php wp_nonce_field('kfm_network_save'); ?>
             <input type="hidden" name="kfm_network_save" value="1">
         <?php else : ?>
-            <?php settings_fields('kfm_options_group'); ?>
+            <?php wp_nonce_field('kfm_general_save'); ?>
+            <input type="hidden" name="kfm_general_save" value="1">
         <?php endif; ?>
         <table class="form-table" role="presentation">
 

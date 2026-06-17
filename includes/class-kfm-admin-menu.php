@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Admin menu class.
  * Handles registration of the admin menu and rendering of admin pages.
@@ -10,11 +11,11 @@
  */
 
 // Exit if accessed directly.
-defined( 'ABSPATH' ) || die( 'Direct access is not allowed!' );
+defined('ABSPATH') || die('Direct access is not allowed!');
 
 // make sure the class is only defined once, in case of multiple includes or autoloading issues
-if( !class_exists('KFM_Admin_Menu') ) {
-        
+if (!class_exists('KFM_Admin_Menu')) {
+
     /**
      * Registers the KFM admin menu pages and renders each admin page.
      * Delegates all asset enqueueing to KFM_Asset_Loader.
@@ -24,7 +25,8 @@ if( !class_exists('KFM_Admin_Menu') ) {
      * @author Kevin Pirnie <iam@kevinpirnie.com>
      *
      */
-    class KFM_Admin_Menu {
+    class KFM_Admin_Menu
+    {
 
         // Store the admin page hooks to target asset loading
         private array $admin_hooks = [];
@@ -42,7 +44,8 @@ if( !class_exists('KFM_Admin_Menu') ) {
          * @param KFM_Asset_Loader $asset_loader
          *
          */
-        public function __construct( KFM_Asset_Loader $asset_loader ) {
+        public function __construct(KFM_Asset_Loader $asset_loader)
+        {
             $this->asset_loader = $asset_loader;
         }
 
@@ -57,13 +60,14 @@ if( !class_exists('KFM_Admin_Menu') ) {
          * @return void
          *
          */
-        public function register(): void {
-            add_action( 'admin_menu',            [ $this, 'admin_menu' ] );
-            add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+        public function register(): void
+        {
+            add_action('admin_menu',            [$this, 'admin_menu']);
+            add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
 
             // make sure its available at the network level as well
-            add_action( 'network_admin_menu',    [ $this, 'admin_menu' ] );
-            add_action( 'network_admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+            add_action('network_admin_menu',    [$this, 'admin_menu']);
+            add_action('network_admin_enqueue_scripts', [$this, 'enqueue_assets']);
         }
 
         /**
@@ -79,56 +83,72 @@ if( !class_exists('KFM_Admin_Menu') ) {
          * @return void
          *
          */
-        public function admin_menu(): void {
+        public function admin_menu(): void
+        {
 
             // Top-level → file browser
             $browse = add_menu_page(
-                __( 'File Manager', 'kp-file-manager' ),
-                __( 'File Manager', 'kp-file-manager' ),
+                __('File Manager', 'kp-file-manager'),
+                __('File Manager', 'kp-file-manager'),
                 'read',
                 'kp-file-manager',
-                [ $this, 'render_page' ],
+                [$this, 'render_page'],
                 'dashicons-media-document',
                 80
             );
 
             // file browser submenu (duplicate link for convenience) + settings submenus
-            $browse2 = add_submenu_page( 'kp-file-manager',
-                __( 'Browse Files', 'kp-file-manager' ),
-                __( 'Browse Files', 'kp-file-manager' ),
-                'read', 'kp-file-manager', [ $this, 'render_page' ]
+            $browse2 = add_submenu_page(
+                'kp-file-manager',
+                __('Browse Files', 'kp-file-manager'),
+                __('Browse Files', 'kp-file-manager'),
+                'read',
+                'kp-file-manager',
+                [$this, 'render_page']
             );
 
             // settings submenu
-            $settings = add_submenu_page( 'kp-file-manager',
-                __( 'General Settings', 'kp-file-manager' ),
-                __( 'Settings', 'kp-file-manager' ),
-                'manage_options', 'kfm-settings', [ $this, 'render_settings' ]
+            $settings = add_submenu_page(
+                'kp-file-manager',
+                __('General Settings', 'kp-file-manager'),
+                __('Settings', 'kp-file-manager'),
+                'manage_options',
+                'kfm-settings',
+                [$this, 'render_settings']
             );
 
             // permissions submenu
-            $perms = add_submenu_page( 'kp-file-manager',
-                __( 'Role Permissions', 'kp-file-manager' ),
-                __( 'Permissions', 'kp-file-manager' ),
-                'manage_options', 'kfm-permissions', [ $this, 'render_permissions' ]
+            $perms = add_submenu_page(
+                'kp-file-manager',
+                __('Role Permissions', 'kp-file-manager'),
+                __('Permissions', 'kp-file-manager'),
+                'manage_options',
+                'kfm-permissions',
+                [$this, 'render_permissions']
             );
 
             // security submenu
-            $security = add_submenu_page( 'kp-file-manager',
-                __( 'Security Settings', 'kp-file-manager' ),
-                __( 'Security', 'kp-file-manager' ),
-                'manage_options', 'kfm-security', [ $this, 'render_security' ]
+            $security = add_submenu_page(
+                'kp-file-manager',
+                __('Security Settings', 'kp-file-manager'),
+                __('Security', 'kp-file-manager'),
+                'manage_options',
+                'kfm-security',
+                [$this, 'render_security']
             );
 
             // audit log submenu
-            $audit = add_submenu_page( 'kp-file-manager',
-                __( 'Audit Log', 'kp-file-manager' ),
-                __( 'Audit Log', 'kp-file-manager' ),
-                'manage_options', 'kfm-audit', [ $this, 'render_audit' ]
+            $audit = add_submenu_page(
+                'kp-file-manager',
+                __('Audit Log', 'kp-file-manager'),
+                __('Audit Log', 'kp-file-manager'),
+                'manage_options',
+                'kfm-audit',
+                [$this, 'render_audit']
             );
 
             // Store the hooks for our pages so we can target them when enqueuing assets
-            $this->admin_hooks = array_filter( [ $browse, $browse2, $settings, $perms, $security, $audit ] );
+            $this->admin_hooks = array_filter([$browse, $browse2, $settings, $perms, $security, $audit]);
         }
 
         /**
@@ -142,19 +162,20 @@ if( !class_exists('KFM_Admin_Menu') ) {
          * @return void
          *
          */
-        public function enqueue_assets( string $hook ): void {
+        public function enqueue_assets(string $hook): void
+        {
 
             // Only enqueue on our plugin's admin pages
-            if ( ! in_array( $hook, $this->admin_hooks, true ) ) return;
+            if (! in_array($hook, $this->admin_hooks, true)) return;
 
             // UIkit is needed on all our admin pages
             $this->asset_loader->enqueue_uikit();
 
             // Only the file-browser pages need CodeMirror and kfm-app
-            $browser_hooks = array_slice( $this->admin_hooks, 0, 2 ); // browse + browse2
+            $browser_hooks = array_slice($this->admin_hooks, 0, 2); // browse + browse2
 
             // Enqueue CodeMirror and our main app script only on the file browser pages
-            if ( in_array( $hook, $browser_hooks, true ) ) {
+            if (in_array($hook, $browser_hooks, true)) {
                 $this->asset_loader->enqueue_file_manager();
             } else {
 
@@ -175,11 +196,12 @@ if( !class_exists('KFM_Admin_Menu') ) {
          * @return void
          *
          */
-        public function render_page(): void {
+        public function render_page(): void
+        {
 
             // Permission check
-            if ( ! KFM_Settings::current_user_allowed() ) {
-                wp_die( esc_html__( 'You do not have permission to access the File Manager.', 'kp-file-manager' ) );
+            if (! KFM_Settings::current_user_allowed()) {
+                wp_die(esc_html__('You do not have permission to access the File Manager.', 'kp-file-manager'));
             }
 
             // Render the file manager page
@@ -198,21 +220,32 @@ if( !class_exists('KFM_Admin_Menu') ) {
          * @return void
          *
          */
-        public function render_settings(): void {
+        public function render_settings(): void
+        {
 
             // Permission check
-            if ( ! current_user_can( 'manage_options' ) && ! current_user_can( 'manage_network_options' ) ) {
-                wp_die( esc_html__( 'Insufficient permissions.', 'kp-file-manager' ) );
+            if (! current_user_can('manage_options') && ! current_user_can('manage_network_options')) {
+                wp_die(__('Insufficient permissions.', 'kp-file-manager'));
             }
 
-            // Handle network admin save
-            if ( is_network_admin() && isset( $_POST['kfm_network_save'] ) ) {
-                check_admin_referer( 'kfm_network_save' );
-                $disabled = isset( $_POST['kfm_disabled_sites'] )
-                    ? array_values( array_map( 'absint', (array) $_POST['kfm_disabled_sites'] ) )
+            // Handle network admin save (multisite disabled-sites list)
+            if (is_network_admin() && isset($_POST['kfm_network_save'])) {
+                check_admin_referer('kfm_network_save');
+                $disabled = isset($_POST['kfm_disabled_sites'])
+                    ? array_values(array_map('absint', (array) $_POST['kfm_disabled_sites']))
                     : [];
-                update_site_option( 'kfm_disabled_sites', $disabled );
-                add_settings_error( 'kfm_options_group', 'saved', __( 'Settings saved.', 'kp-file-manager' ), 'updated' );
+                update_site_option('kfm_disabled_sites', $disabled);
+                add_settings_error('kfm_options_group', 'saved', __('Settings saved.', 'kp-file-manager'), 'updated');
+            }
+
+            // Handle standard (non-network) save directly — avoids options.php multisite issues
+            if (! is_network_admin() && isset($_POST['kfm_general_save'])) {
+                check_admin_referer('kfm_general_save');
+                $settings = new KFM_Settings();
+                update_option(KFM_Settings::OPTION_PATH,          $settings->sanitize_path(sanitize_text_field(wp_unslash($_POST[KFM_Settings::OPTION_PATH] ?? ''))));
+                update_option(KFM_Settings::OPTION_SHOW_DOTFILES, isset($_POST[KFM_Settings::OPTION_SHOW_DOTFILES]) ? '1' : '0');
+                update_option(KFM_Settings::OPTION_LOG_ENTRIES,   $settings->sanitize_log_entries($_POST[KFM_Settings::OPTION_LOG_ENTRIES] ?? 100));
+                add_settings_error('kfm_options_group', 'saved', __('Settings saved.', 'kp-file-manager'), 'updated');
             }
 
             // Render the settings page
@@ -232,18 +265,19 @@ if( !class_exists('KFM_Admin_Menu') ) {
          * @return void
          *
          */
-        public function render_permissions(): void {
+        public function render_permissions(): void
+        {
 
             // Permission check
-            if ( ! current_user_can( 'manage_options' ) ) wp_die( esc_html__( 'Insufficient permissions.', 'kp-file-manager' ) );
+            if (! current_user_can('manage_options')) wp_die(esc_html__('Insufficient permissions.', 'kp-file-manager'));
 
             // Handle form save (not using register_setting for the matrix – manual save)
-            if ( isset( $_POST['kfm_save_permissions'] ) ) {
+            if (isset($_POST['kfm_save_permissions'])) {
 
                 // Verify nonce and save permissions
-                check_admin_referer( 'kfm_save_permissions' );
-                KFM_Permissions::save_from_post( wp_unslash( $_POST['kfm_perms'] ) ?? [] );
-                add_settings_error( 'kfm_permissions', 'saved', __( 'Permissions saved.', 'kp-file-manager' ), 'updated' );
+                check_admin_referer('kfm_save_permissions');
+                KFM_Permissions::save_from_post(wp_unslash($_POST['kfm_perms']) ?? []);
+                add_settings_error('kfm_permissions', 'saved', __('Permissions saved.', 'kp-file-manager'), 'updated');
             }
 
             // Render the permissions page
@@ -262,10 +296,11 @@ if( !class_exists('KFM_Admin_Menu') ) {
          * @return void
          *
          */
-        public function render_security(): void {
+        public function render_security(): void
+        {
 
             // Permission check
-            if ( ! current_user_can( 'manage_options' ) ) wp_die( esc_html__( 'Insufficient permissions.', 'kp-file-manager' ) );
+            if (! current_user_can('manage_options')) wp_die(esc_html__('Insufficient permissions.', 'kp-file-manager'));
 
             // Render the security settings page
             include KFM_PLUGIN_DIR . 'templates/settings-security.php';
@@ -284,18 +319,19 @@ if( !class_exists('KFM_Admin_Menu') ) {
          * @return void
          *
          */
-        public function render_audit(): void {
+        public function render_audit(): void
+        {
 
             // Permission check
-            if ( ! current_user_can( 'manage_options' ) ) wp_die( esc_html__( 'Insufficient permissions.', 'kp-file-manager' ) );
+            if (! current_user_can('manage_options')) wp_die(esc_html__('Insufficient permissions.', 'kp-file-manager'));
 
             // Handle clear
-            if ( isset( $_POST['kfm_clear_log'] ) ) {
+            if (isset($_POST['kfm_clear_log'])) {
 
                 // Verify nonce and clear log
-                check_admin_referer( 'kfm_clear_log' );
+                check_admin_referer('kfm_clear_log');
                 KFM_Audit_Log::clear();
-                add_settings_error( 'kfm_audit', 'cleared', __( 'Audit log cleared.', 'kp-file-manager' ), 'updated' );
+                add_settings_error('kfm_audit', 'cleared', __('Audit log cleared.', 'kp-file-manager'), 'updated');
             }
 
             // Render the audit log page
