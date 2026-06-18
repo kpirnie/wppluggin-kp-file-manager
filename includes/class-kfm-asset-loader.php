@@ -59,16 +59,19 @@ if (!class_exists('KFM_Asset_Loader')) {
          */
         public function enqueue_file_manager(): void
         {
-            // Register + enqueue jQuery explicitly — no longer auto-registered on the frontend in WP 6.9.1+
-            if (! wp_script_is('jquery', 'registered')) {
-                wp_register_script('jquery', includes_url('js/jquery/jquery.min.js'), [], false, true);
-            }
-            wp_enqueue_script('jquery');
 
-            // enqueue CodeMirror with a basic mode to get the editor assets loaded.
-            $cm = wp_enqueue_code_editor(['type' => 'text/plain']);
-            wp_enqueue_style('wp-codemirror');
-            wp_enqueue_script('wp-codemirror');
+            // wp_enqueue_code_editor() is admin-only; register CodeMirror manually on the frontend
+            if (is_admin()) {
+                $cm = wp_enqueue_code_editor(['type' => 'text/plain']);
+                wp_enqueue_style('wp-codemirror');
+                wp_enqueue_script('wp-codemirror');
+            } else {
+                $cm = false;
+                wp_register_style('wp-codemirror', includes_url('js/codemirror/codemirror.min.css'), [], false);
+                wp_enqueue_style('wp-codemirror');
+                wp_register_script('wp-codemirror', includes_url('js/codemirror/codemirror.min.js'), [], false, false);
+                wp_enqueue_script('wp-codemirror');
+            }
 
             // enqueue KFM's custom stylesheet
             wp_enqueue_style(
