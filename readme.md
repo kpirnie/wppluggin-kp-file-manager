@@ -121,10 +121,8 @@ Yes. Search for "KP File Manager" in the block inserter to embed the file manage
 ## Changelog
 
 ### 1.0.58
-- Added GitHub Releases update checker — updates now appear in WordPress Dashboard → Updates automatically
-
-### 1.0.57
 - Initial release
+- Added GitHub Releases update checker — updates now appear in WordPress Dashboard → Updates automatically
 - Full file manager with CRUD operations (copy, move, create, delete, rename, chmod)
 - CodeMirror text editor with syntax highlighting
 - Role-based access control
@@ -133,7 +131,7 @@ Yes. Search for "KP File Manager" in the block inserter to embed the file manage
 
 ## License
 
-[GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) — see `LICENSE` for full terms.
+[MIT](https://opensource.org/licenses/MIT) — see `LICENSE` for full terms.
 
 ## Author
 
